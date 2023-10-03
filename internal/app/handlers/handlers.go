@@ -9,18 +9,18 @@ import (
 	"strings"
 )
 
-type UrlShortener struct {
+type URLShortener struct {
 	urlMap map[string]string
 }
 
-// NewUrlShortener is a constructor function for UrlShortener
-func NewUrlShortener() *UrlShortener {
-	return &UrlShortener{
+// NewURLShortener is a constructor function for URLShortener
+func NewURLShortener() *URLShortener {
+	return &URLShortener{
 		urlMap: make(map[string]string),
 	}
 }
 
-func (us *UrlShortener) ShortenUrl(w http.ResponseWriter, r *http.Request) {
+func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusBadRequest)
 		return
@@ -35,14 +35,14 @@ func (us *UrlShortener) ShortenUrl(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Url is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedUrl := generateKey()
-	us.urlMap[shortenedUrl] = url
+	shortenedURL := generateKey()
+	us.urlMap[shortenedURL] = url
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedUrl)
+	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedURL)
 }
 
-func (us *UrlShortener) HandleShortenedUrl(w http.ResponseWriter, r *http.Request) {
+func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusBadRequest)
 		return
