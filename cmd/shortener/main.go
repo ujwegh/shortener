@@ -7,15 +7,15 @@ import (
 )
 
 func main() {
-	shortener := app.NewUrlShortener()
+	shortener := app.NewURLShortener()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/" {
-			shortener.ShortenUrl(w, r)
+			shortener.ShortenURL(w, r)
 			return
 		}
-		shortener.HandleShortenedUrl(w, r)
+		shortener.HandleShortenedURL(w, r)
 	})
 
 	fmt.Println("Starting server on port 8080")
