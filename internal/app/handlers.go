@@ -35,11 +35,11 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Url is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedUrl := generateKey()
-	us.urlMap[shortenedUrl] = url
+	shortenedURL := generateKey()
+	us.urlMap[shortenedURL] = url
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedUrl)
+	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedURL)
 }
 
 func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
