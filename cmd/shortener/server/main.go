@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	app "github.com/ujwegh/shortener/internal/app"
+	"github.com/ujwegh/shortener/internal/app/handlers"
 	"net/http"
 )
 
 func main() {
-	shortener := app.NewUrlShortener()
+	shortener := handlers.NewUrlShortener()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
