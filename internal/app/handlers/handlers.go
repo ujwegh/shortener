@@ -13,7 +13,6 @@ type URLShortener struct {
 	urlMap map[string]string
 }
 
-// NewURLShortener is a constructor function for URLShortener
 func NewURLShortener() *URLShortener {
 	return &URLShortener{
 		urlMap: make(map[string]string),
@@ -37,7 +36,7 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 	shortenedURL := generateKey()
 	us.urlMap[shortenedURL] = url
-	w.Header().Set("Content-Type", "text/plain")
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedURL)
 }
@@ -51,10 +50,6 @@ func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Reques
 	pathParts := strings.Split(r.URL.Path, "/")
 	if len(pathParts) > 1 {
 		shortKey = pathParts[len(pathParts)-1]
-	}
-	if shortKey == "" {
-		http.Error(w, "Shortened key is invalid", http.StatusBadRequest)
-		return
 	}
 	url, found := us.urlMap[shortKey]
 	if !found {
