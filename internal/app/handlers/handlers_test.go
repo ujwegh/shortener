@@ -93,7 +93,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 		response    string
 		contentType string
 	}
-	var targetUrl = "https://google.com"
+	var targetURL = "https://google.com"
 	key := "hdINdIoD"
 	tests := []struct {
 		urlMap  map[string]string
@@ -105,7 +105,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 	}{
 		{
 			urlMap: map[string]string{
-				key: targetUrl,
+				key: targetURL,
 			},
 			name:    "positive shorten url test",
 			request: "/" + key,
@@ -113,12 +113,12 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			want: want{
 				code:        307,
 				contentType: "text/html; charset=utf-8",
-				response:    targetUrl,
+				response:    targetURL,
 			},
 		},
 		{
 			urlMap: map[string]string{
-				key: targetUrl,
+				key: targetURL,
 			},
 			name:    "sent wrong key",
 			request: "/" + "wrongKey",
@@ -131,7 +131,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 		},
 		{
 			urlMap: map[string]string{
-				key: targetUrl,
+				key: targetURL,
 			},
 			name:    "wrong method",
 			request: "/" + key,
