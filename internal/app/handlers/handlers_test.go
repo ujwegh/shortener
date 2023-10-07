@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"context"
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -17,17 +19,17 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 		contentType string
 	}
 	tests := []struct {
-		name    string
-		method  string
-		request string
-		body    string
-		want    want
+		name   string
+		method string
+		route  string
+		body   string
+		want   want
 	}{
 		{
-			name:    "positive shorten url test",
-			request: "/",
-			method:  http.MethodPost,
-			body:    "https://google.com",
+			name:   "positive shorten url test",
+			route:  "/",
+			method: http.MethodPost,
+			body:   "https://google.com",
 			want: want{
 				code:        201,
 				response:    "http://localhost:8080/",
@@ -35,10 +37,10 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			},
 		},
 		{
-			name:    "wrong http method",
-			method:  http.MethodGet,
-			request: "/",
-			body:    "https://google.com",
+			name:   "wrong http method",
+			method: http.MethodGet,
+			route:  "/",
+			body:   "https://google.com",
 			want: want{
 				code:        400,
 				contentType: "text/plain; charset=utf-8",
@@ -46,10 +48,10 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			},
 		},
 		{
-			name:    "empty request body",
-			method:  http.MethodPost,
-			request: "/",
-			body:    "",
+			name:   "empty route body",
+			method: http.MethodPost,
+			route:  "/",
+			body:   "",
 			want: want{
 				code:        400,
 				contentType: "text/plain; charset=utf-8",
@@ -59,8 +61,11 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(test.method, test.request, strings.NewReader(test.body))
 			w := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, test.route, strings.NewReader(test.body))
+			rctx := chi.NewRouteContext()
+			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
+
 			var urlMap = make(map[string]string)
 			us := &URLShortener{
 				urlMap: urlMap,
@@ -95,11 +100,13 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 	}
 	var targetURL = "https://google.com"
 	key := "hdINdIoD"
+	wrongKey := "wrongKey"
 	tests := []struct {
+		pathVar string
 		urlMap  map[string]string
 		name    string
 		method  string
-		request string
+		route   string
 		body    string
 		want    want
 	}{
@@ -108,7 +115,8 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 				key: targetURL,
 			},
 			name:    "positive shorten url test",
-			request: "/" + key,
+			pathVar: key,
+			route:   "/" + key,
 			method:  http.MethodGet,
 			want: want{
 				code:        307,
@@ -121,7 +129,8 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 				key: targetURL,
 			},
 			name:    "sent wrong key",
-			request: "/" + "wrongKey",
+			pathVar: wrongKey,
+			route:   "/" + wrongKey,
 			method:  http.MethodGet,
 			want: want{
 				code:        404,
@@ -134,7 +143,8 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 				key: targetURL,
 			},
 			name:    "wrong method",
-			request: "/" + key,
+			pathVar: key,
+			route:   "/" + key,
 			method:  http.MethodPost,
 			want: want{
 				code:        400,
@@ -145,8 +155,11 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			request := httptest.NewRequest(test.method, test.request, strings.NewReader(test.body))
 			w := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, test.route, strings.NewReader(test.body))
+			rctx := chi.NewRouteContext()
+			rctx.URLParams.Add("id", test.pathVar)
+			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &URLShortener{
 				urlMap: test.urlMap,
 			}

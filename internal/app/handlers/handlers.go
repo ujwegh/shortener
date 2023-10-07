@@ -4,9 +4,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"fmt"
+	"github.com/go-chi/chi/v5"
 	"io"
 	"net/http"
-	"strings"
 )
 
 type URLShortener struct {
@@ -46,11 +46,7 @@ func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Method not allowed", http.StatusBadRequest)
 		return
 	}
-	shortKey := ""
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) > 1 {
-		shortKey = pathParts[len(pathParts)-1]
-	}
+	shortKey := chi.URLParam(r, "id")
 	url, found := us.urlMap[shortKey]
 	if !found {
 		http.Error(w, "Shortened url not found", http.StatusNotFound)
