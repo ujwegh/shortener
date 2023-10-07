@@ -36,7 +36,7 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	}
 	shortenedURL := generateKey()
 	us.urlMap[shortenedURL] = url
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedURL)
 }
@@ -52,7 +52,7 @@ func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Shortened url not found", http.StatusNotFound)
 		return
 	}
-	w.Header().Set("Location", url)
+	w.Header().Add("Location", url)
 	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
 }
 

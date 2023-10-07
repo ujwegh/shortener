@@ -8,31 +8,17 @@ import (
 	"net/http"
 )
 
-type Server struct {
-	Router    *chi.Mux
-	shortener handlers.URLShortener
-}
-
-func CreateNewServer() *Server {
-	s := &Server{}
-	s.Router = chi.NewRouter()
-	s.shortener = *handlers.NewURLShortener()
-
-	return s
-}
-
-func (s *Server) MountHandlers() {
-	s.Router.Use(middleware.Logger)
-
-	s.Router.Get("/", s.shortener.ShortenURL)
-	s.Router.Post("/{id}", s.shortener.HandleShortenedURL)
-}
-
 func main() {
-	s := CreateNewServer()
-	s.MountHandlers()
+	r := chi.NewRouter()
+	us := handlers.NewURLShortener()
+
+	r.Use(middleware.Logger)
+
+	r.Post("/", us.ShortenURL)
+	r.Get("/{id}", us.HandleShortenedURL)
+
 	fmt.Println("Starting server on port 8080")
-	err := http.ListenAndServe(`:8080`, s.Router)
+	err := http.ListenAndServe(`:8080`, r)
 	if err != nil {
 		panic(err)
 	}
