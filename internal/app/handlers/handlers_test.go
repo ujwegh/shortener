@@ -37,17 +37,6 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			},
 		},
 		{
-			name:   "wrong http method",
-			method: http.MethodGet,
-			route:  "/",
-			body:   "https://google.com",
-			want: want{
-				code:        400,
-				contentType: "text/plain; charset=utf-8",
-				response:    "Method not allowed\n",
-			},
-		},
-		{
 			name:   "empty route body",
 			method: http.MethodPost,
 			route:  "/",
@@ -136,20 +125,6 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 				code:        404,
 				contentType: "text/plain; charset=utf-8",
 				response:    "Shortened url not found\n",
-			},
-		},
-		{
-			urlMap: map[string]string{
-				key: targetURL,
-			},
-			name:    "wrong method",
-			pathVar: key,
-			route:   "/" + key,
-			method:  http.MethodPost,
-			want: want{
-				code:        400,
-				contentType: "text/plain; charset=utf-8",
-				response:    "Method not allowed\n",
 			},
 		},
 	}

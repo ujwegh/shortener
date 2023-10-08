@@ -20,10 +20,6 @@ func NewURLShortener() *URLShortener {
 }
 
 func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusBadRequest)
-		return
-	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Unable to read body", http.StatusBadRequest)
@@ -42,10 +38,6 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 }
 
 func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "Method not allowed", http.StatusBadRequest)
-		return
-	}
 	shortKey := chi.URLParam(r, "id")
 	url, found := us.urlMap[shortKey]
 	if !found {
