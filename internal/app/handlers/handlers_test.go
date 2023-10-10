@@ -31,7 +31,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			route:            "/",
 			method:           http.MethodPost,
 			body:             "https://google.com",
-			shortenedURLAddr: "localhost:8080",
+			shortenedURLAddr: "http://localhost:8080",
 			want: want{
 				code:        201,
 				response:    "http://localhost:8080/",
@@ -43,7 +43,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			method:           http.MethodPost,
 			route:            "/",
 			body:             "",
-			shortenedURLAddr: "localhost:8080",
+			shortenedURLAddr: "http://localhost:8080",
 			want: want{
 				code:        400,
 				contentType: "text/plain; charset=utf-8",
@@ -55,7 +55,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			route:            "/",
 			method:           http.MethodPost,
 			body:             "https://google.com",
-			shortenedURLAddr: "localhost:8090",
+			shortenedURLAddr: "http://localhost:8090",
 			want: want{
 				code:        201,
 				response:    "http://localhost:8090/",

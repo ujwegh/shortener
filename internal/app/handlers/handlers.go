@@ -36,7 +36,7 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	us.urlMap[shortenedURL] = url
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "http://%s/%s", us.shortenedURLAddr, shortenedURL)
+	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortenedURL)
 }
 
 func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
