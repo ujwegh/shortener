@@ -19,17 +19,19 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 		contentType string
 	}
 	tests := []struct {
-		name   string
-		method string
-		route  string
-		body   string
-		want   want
+		name             string
+		method           string
+		route            string
+		body             string
+		shortenedURLAddr string
+		want             want
 	}{
 		{
-			name:   "positive shorten url test",
-			route:  "/",
-			method: http.MethodPost,
-			body:   "https://google.com",
+			name:             "positive shorten url test",
+			route:            "/",
+			method:           http.MethodPost,
+			body:             "https://google.com",
+			shortenedURLAddr: "localhost:8080",
 			want: want{
 				code:        201,
 				response:    "http://localhost:8080/",
@@ -37,14 +39,27 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			},
 		},
 		{
-			name:   "empty route body",
-			method: http.MethodPost,
-			route:  "/",
-			body:   "",
+			name:             "empty route body",
+			method:           http.MethodPost,
+			route:            "/",
+			body:             "",
+			shortenedURLAddr: "localhost:8080",
 			want: want{
 				code:        400,
 				contentType: "text/plain; charset=utf-8",
 				response:    "Url is empty\n",
+			},
+		},
+		{
+			name:             "positive shorten url test",
+			route:            "/",
+			method:           http.MethodPost,
+			body:             "https://google.com",
+			shortenedURLAddr: "localhost:8090",
+			want: want{
+				code:        201,
+				response:    "http://localhost:8090/",
+				contentType: "text/plain; charset=utf-8",
 			},
 		},
 	}
@@ -57,7 +72,8 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 
 			var urlMap = make(map[string]string)
 			us := &URLShortener{
-				urlMap: urlMap,
+				urlMap:           urlMap,
+				shortenedURLAddr: test.shortenedURLAddr,
 			}
 			us.ShortenURL(w, request)
 

@@ -10,12 +10,14 @@ import (
 )
 
 type URLShortener struct {
-	urlMap map[string]string
+	urlMap           map[string]string
+	shortenedURLAddr string
 }
 
-func NewURLShortener() *URLShortener {
+func NewURLShortener(shortenedURLAddr string) *URLShortener {
 	return &URLShortener{
-		urlMap: make(map[string]string),
+		urlMap:           make(map[string]string),
+		shortenedURLAddr: shortenedURLAddr,
 	}
 }
 
@@ -34,7 +36,7 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	us.urlMap[shortenedURL] = url
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "http://localhost:8080/%s", shortenedURL)
+	fmt.Fprintf(w, "http://%s/%s", us.shortenedURLAddr, shortenedURL)
 }
 
 func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
