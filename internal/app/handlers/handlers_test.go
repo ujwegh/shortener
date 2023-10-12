@@ -71,7 +71,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 
 			var urlMap = make(map[string]string)
-			us := &URLShortener{
+			us := &ShortenerHandlers{
 				urlMap:           urlMap,
 				shortenedURLAddr: test.shortenedURLAddr,
 			}
@@ -151,7 +151,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			rctx := chi.NewRouteContext()
 			rctx.URLParams.Add("id", test.pathVar)
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
-			us := &URLShortener{
+			us := &ShortenerHandlers{
 				urlMap: test.urlMap,
 			}
 			us.HandleShortenedURL(w, request)

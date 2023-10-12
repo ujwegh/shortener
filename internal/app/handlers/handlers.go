@@ -9,19 +9,19 @@ import (
 	"net/http"
 )
 
-type URLShortener struct {
+type ShortenerHandlers struct {
 	urlMap           map[string]string
 	shortenedURLAddr string
 }
 
-func NewURLShortener(shortenedURLAddr string) *URLShortener {
-	return &URLShortener{
+func NewShortenerHandlers(shortenedURLAddr string) *ShortenerHandlers {
+	return &ShortenerHandlers{
 		urlMap:           make(map[string]string),
 		shortenedURLAddr: shortenedURLAddr,
 	}
 }
 
-func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
+func (us *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Unable to read body", http.StatusBadRequest)
@@ -39,7 +39,7 @@ func (us *URLShortener) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortenedURL)
 }
 
-func (us *URLShortener) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
+func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
 	shortKey := chi.URLParam(r, "id")
 	url, found := us.urlMap[shortKey]
 	if !found {
