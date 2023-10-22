@@ -2,6 +2,7 @@ package config
 
 import (
 	"flag"
+	"github.com/ujwegh/shortener/internal/app/logger"
 )
 
 type AppConfig struct {
@@ -20,6 +21,17 @@ func ParseFlags() AppConfig {
 	if config.ShortenedURLAddr == "" {
 		flag.StringVar(&config.ShortenedURLAddr, "b", defaultShortenedURLAddress, "address and port for shortened url")
 	}
+	initLogger()
 	flag.Parse()
 	return config
+}
+
+func initLogger() {
+	defaultLogLevel := "info"
+	var logLevel = ""
+	flag.StringVar(&logLevel, "ll", defaultLogLevel, "logging level")
+	err := logger.Initialize(logLevel)
+	if err != nil {
+		panic(err)
+	}
 }
