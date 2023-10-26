@@ -10,11 +10,11 @@ import (
 func NewAppRouter(config config.AppConfig) *chi.Mux {
 	r := chi.NewRouter()
 	us := handlers.NewShortenerHandlers(config.ShortenedURLAddr)
-	//r.Use(middleware.Logger)
 	r.Use(logger.RequestLogger)
 	r.Use(logger.ResponseLogger)
 
 	r.Post("/", us.ShortenURL)
+	r.Post("/api/shorten", us.APIShortenURL)
 	r.Get("/{id}", us.HandleShortenedURL)
 	return r
 }

@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	"github.com/mailru/easyjson"
+	dtos "github.com/ujwegh/shortener/internal/app/model"
 	"io"
 	"net/http"
 )
@@ -37,6 +39,35 @@ func (us *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortenedURL)
+}
+
+func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Request) {
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Unable to read body", http.StatusBadRequest)
+		return
+	}
+	request := dtos.ShortenRequestDto{}
+	err = easyjson.Unmarshal(body, &request)
+	if err != nil {
+		http.Error(w, "Unable to parse body", http.StatusBadRequest)
+		return
+	}
+	if request.URL == "" {
+		http.Error(w, "URL is empty", http.StatusBadRequest)
+		return
+	}
+	shortenedURL := generateKey()
+	us.urlMap[shortenedURL] = request.URL
+	response := &dtos.ShortenResponseDto{Result: fmt.Sprintf("%s/%s", us.shortenedURLAddr, shortenedURL)}
+	rawBytes, err := easyjson.Marshal(response)
+	if err != nil {
+		http.Error(w, "Unable to marshal response", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, "%s", rawBytes)
 }
 
 func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
