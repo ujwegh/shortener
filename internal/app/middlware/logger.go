@@ -1,4 +1,4 @@
-package logger
+package middlware
 
 import (
 	"bytes"
@@ -9,7 +9,7 @@ import (
 
 var Log *zap.Logger = zap.NewNop()
 
-func Initialize(level string) error {
+func LoggerInitialize(level string) error {
 	lvl, err := zap.ParseAtomicLevel(level)
 	if err != nil {
 		return err

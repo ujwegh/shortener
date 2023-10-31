@@ -2,7 +2,7 @@ package config
 
 import (
 	"flag"
-	"github.com/ujwegh/shortener/internal/app/logger"
+	"github.com/ujwegh/shortener/internal/app/middlware"
 )
 
 type AppConfig struct {
@@ -30,7 +30,7 @@ func initLogger() {
 	defaultLogLevel := "info"
 	var logLevel = ""
 	flag.StringVar(&logLevel, "ll", defaultLogLevel, "logging level")
-	err := logger.Initialize(logLevel)
+	err := middlware.LoggerInitialize(logLevel)
 	if err != nil {
 		panic(err)
 	}
