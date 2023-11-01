@@ -6,19 +6,20 @@ import (
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/mailru/easyjson"
-	dtos "github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
 )
 
 type ShortenerHandlers struct {
-	urlMap           map[string]string
+	storage          storage.Storage
 	shortenedURLAddr string
 }
 
-func NewShortenerHandlers(shortenedURLAddr string) *ShortenerHandlers {
+func NewShortenerHandlers(shortenedURLAddr string, s storage.Storage) *ShortenerHandlers {
 	return &ShortenerHandlers{
-		urlMap:           make(map[string]string),
+		storage:          s,
 		shortenedURLAddr: shortenedURLAddr,
 	}
 }
@@ -29,16 +30,24 @@ func (us *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Unable to read body", http.StatusBadRequest)
 		return
 	}
-	url := string(body)
-	if url == "" {
+	originalURL := string(body)
+	if originalURL == "" {
 		http.Error(w, "Url is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedURL := generateKey()
-	us.urlMap[shortenedURL] = url
+	shortURL := generateKey()
+	shortenedURL := &model.ShortenedURL{
+		ShortURL:    shortURL,
+		OriginalURL: originalURL,
+	}
+	err = us.storage.WriteShortenedURL(shortenedURL)
+	if err != nil {
+		http.Error(w, "Unable to write shortened URL", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortenedURL)
+	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortURL)
 }
 
 func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Request) {
@@ -47,7 +56,7 @@ func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Unable to read body", http.StatusBadRequest)
 		return
 	}
-	request := dtos.ShortenRequestDto{}
+	request := model.ShortenRequestDto{}
 	err = easyjson.Unmarshal(body, &request)
 	if err != nil {
 		http.Error(w, "Unable to parse body", http.StatusBadRequest)
@@ -57,9 +66,17 @@ func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "URL is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedURL := generateKey()
-	us.urlMap[shortenedURL] = request.URL
-	response := &dtos.ShortenResponseDto{Result: fmt.Sprintf("%s/%s", us.shortenedURLAddr, shortenedURL)}
+	shortURL := generateKey()
+	shortenedURL := &model.ShortenedURL{
+		ShortURL:    shortURL,
+		OriginalURL: request.URL,
+	}
+	err = us.storage.WriteShortenedURL(shortenedURL)
+	if err != nil {
+		http.Error(w, "Unable to write shortened URL", http.StatusInternalServerError)
+		return
+	}
+	response := &model.ShortenResponseDto{Result: fmt.Sprintf("%s/%s", us.shortenedURLAddr, shortenedURL.ShortURL)}
 	rawBytes, err := easyjson.Marshal(response)
 	if err != nil {
 		http.Error(w, "Unable to marshal response", http.StatusInternalServerError)
@@ -72,13 +89,18 @@ func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 
 func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
 	shortKey := chi.URLParam(r, "id")
-	url, found := us.urlMap[shortKey]
-	if !found {
+	shortenedURL, err := us.storage.ReadShortenedURL(shortKey)
+	if err != nil {
+		http.Error(w, "Unable to read shortened URL", http.StatusInternalServerError)
+		return
+	}
+	originalURL := shortenedURL.OriginalURL
+	if originalURL == "" {
 		http.Error(w, "Shortened url not found", http.StatusNotFound)
 		return
 	}
-	w.Header().Add("Location", url)
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	w.Header().Add("Location", originalURL)
+	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
 }
 
 func generateKey() string {

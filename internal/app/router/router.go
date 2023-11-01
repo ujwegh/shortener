@@ -5,11 +5,13 @@ import (
 	"github.com/ujwegh/shortener/internal/app/config"
 	"github.com/ujwegh/shortener/internal/app/handlers"
 	"github.com/ujwegh/shortener/internal/app/middlware"
+	"github.com/ujwegh/shortener/internal/app/storage"
 )
 
 func NewAppRouter(config config.AppConfig) *chi.Mux {
 	r := chi.NewRouter()
-	us := handlers.NewShortenerHandlers(config.ShortenedURLAddr)
+	s := storage.NewFileStorage(config.FileStoragePath)
+	us := handlers.NewShortenerHandlers(config.ShortenedURLAddr, s)
 	r.Use(middlware.RequestLogger)
 	r.Use(middlware.ResponseLogger)
 	r.Use(middlware.RequestZipper)

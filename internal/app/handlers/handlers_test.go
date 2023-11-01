@@ -6,13 +6,27 @@ import (
 	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	dtos "github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/model"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+type MockStorage struct {
+	urlMap map[string]model.ShortenedURL
+}
+
+func (fss *MockStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
+	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
+	return nil
+}
+
+func (fss *MockStorage) ReadShortenedURL(shortURL string) (model.ShortenedURL, error) {
+	shortenedURL := fss.urlMap[shortURL]
+	return shortenedURL, nil
+}
 
 func TestUrlShortener_ShortenUrl(t *testing.T) {
 	type want struct {
@@ -72,9 +86,9 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			rctx := chi.NewRouteContext()
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 
-			var urlMap = make(map[string]string)
+			urlMap := make(map[string]model.ShortenedURL)
 			us := &ShortenerHandlers{
-				urlMap:           urlMap,
+				storage:          &MockStorage{urlMap: urlMap},
 				shortenedURLAddr: test.shortenedURLAddr,
 			}
 			us.ShortenURL(w, request)
@@ -169,9 +183,9 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			rctx := chi.NewRouteContext()
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			request.Header.Set("Content-Type", "application/json")
-			var urlMap = make(map[string]string)
+			var urlMap = make(map[string]model.ShortenedURL)
 			us := &ShortenerHandlers{
-				urlMap:           urlMap,
+				storage:          &MockStorage{urlMap: urlMap},
 				shortenedURLAddr: test.shortenedURLAddr,
 			}
 			us.APIShortenURL(w, request)
@@ -185,7 +199,7 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			require.NoError(t, err2)
 
 			if res.StatusCode == http.StatusCreated {
-				var response = &dtos.ShortenResponseDto{}
+				var response = &model.ShortenResponseDto{}
 				err := easyjson.Unmarshal(body, response)
 				assert.Nil(t, err)
 				split := strings.Split(response.Result, test.want.response)
@@ -210,7 +224,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 	wrongKey := "wrongKey"
 	tests := []struct {
 		pathVar string
-		urlMap  map[string]string
+		urlMap  map[string]model.ShortenedURL
 		name    string
 		method  string
 		route   string
@@ -218,8 +232,10 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 		want    want
 	}{
 		{
-			urlMap: map[string]string{
-				key: targetURL,
+			urlMap: map[string]model.ShortenedURL{
+				key: {
+					OriginalURL: targetURL,
+				},
 			},
 			name:    "positive shorten url test",
 			pathVar: key,
@@ -232,8 +248,10 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			},
 		},
 		{
-			urlMap: map[string]string{
-				key: targetURL,
+			urlMap: map[string]model.ShortenedURL{
+				key: {
+					OriginalURL: targetURL,
+				},
 			},
 			name:    "sent wrong key",
 			pathVar: wrongKey,
@@ -254,7 +272,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			rctx.URLParams.Add("id", test.pathVar)
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &ShortenerHandlers{
-				urlMap: test.urlMap,
+				storage: &MockStorage{urlMap: test.urlMap},
 			}
 			us.HandleShortenedURL(w, request)
 
