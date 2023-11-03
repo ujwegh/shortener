@@ -17,14 +17,14 @@ func ParseFlags() AppConfig {
 	defaultFileStoragePath := "/tmp/short-url-db.json"
 
 	config := AppConfig{}
+	if config.FileStoragePath == "" {
+		flag.StringVar(&config.FileStoragePath, "f", defaultFileStoragePath, "file storage path")
+	}
 	if config.ServerAddr == "" {
 		flag.StringVar(&config.ServerAddr, "a", defaultServerAddress, "address and port to run server")
 	}
 	if config.ShortenedURLAddr == "" {
 		flag.StringVar(&config.ShortenedURLAddr, "b", defaultShortenedURLAddress, "address and port for shortened url")
-	}
-	if config.FileStoragePath == "" {
-		flag.StringVar(&config.FileStoragePath, "f", defaultFileStoragePath, "file storage path")
 	}
 	initLogger()
 	flag.Parse()
