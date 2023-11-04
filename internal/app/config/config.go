@@ -3,7 +3,6 @@ package config
 import (
 	"flag"
 	"github.com/ujwegh/shortener/internal/app/middlware"
-	"log"
 	"os"
 )
 
@@ -18,9 +17,10 @@ func ParseFlags() AppConfig {
 	defaultShortenedURLAddress := "http://localhost:8080"
 	defaultFileStoragePath := "/tmp/short-url-db.json"
 
-	log.Printf("File storage path: %s", os.Getenv("FILE_STORAGE_PATH"))
 	config := AppConfig{}
-	if config.FileStoragePath == "" {
+	fileStoragePath, fileStoragePathExist := os.LookupEnv("FILE_STORAGE_PATH")
+	config.FileStoragePath = fileStoragePath
+	if !fileStoragePathExist {
 		flag.StringVar(&config.FileStoragePath, "f", defaultFileStoragePath, "file storage path")
 	}
 	if config.ServerAddr == "" {
