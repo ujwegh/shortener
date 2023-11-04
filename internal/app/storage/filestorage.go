@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/ujwegh/shortener/internal/app/model"
+	"io"
 )
 
 type FileStorage struct {
@@ -38,12 +39,13 @@ func (fss *FileStorage) readAllShortenedURLs() ([]model.ShortenedURL, error) {
 
 	var shortenedURLs []model.ShortenedURL
 	for {
-		shortenedURL, err := consumer.readShortenedURL()
-		if err != nil {
-			fmt.Println(err)
-		}
-		if shortenedURL == nil {
+		shortenedURL := &model.ShortenedURL{}
+		err := consumer.readObject(shortenedURL)
+		if err == io.EOF {
 			break
+		}
+		if err != nil {
+			return nil, err
 		}
 		shortenedURLs = append(shortenedURLs, *shortenedURL)
 	}
@@ -60,7 +62,7 @@ func (fss *FileStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) erro
 		}
 		defer producer.close()
 
-		err = producer.writeShortenedURL(shortenedURL)
+		err = producer.writeObject(shortenedURL)
 		if err != nil {
 			return fmt.Errorf("can't write shortened URL: %w", err)
 		}

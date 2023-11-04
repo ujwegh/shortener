@@ -2,7 +2,6 @@ package storage
 
 import (
 	"encoding/json"
-	"github.com/ujwegh/shortener/internal/app/model"
 	"os"
 )
 
@@ -23,8 +22,11 @@ func newProducer(filename string) (*Producer, error) {
 	}, nil
 }
 
-func (p *Producer) writeShortenedURL(shortenedURL *model.ShortenedURL) error {
-	return p.encoder.Encode(&shortenedURL)
+func (p *Producer) writeObject(obj interface{}) error {
+	if err := p.encoder.Encode(obj); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (p *Producer) close() error {
@@ -48,13 +50,11 @@ func newConsumer(filename string) (*Consumer, error) {
 	}, nil
 }
 
-func (c *Consumer) readShortenedURL() (*model.ShortenedURL, error) {
-	url := &model.ShortenedURL{}
-	if err := c.decoder.Decode(&url); err != nil {
-		return nil, err
+func (c *Consumer) readObject(obj interface{}) error {
+	if err := c.decoder.Decode(obj); err != nil {
+		return err
 	}
-
-	return url, nil
+	return nil
 }
 
 func (c *Consumer) close() error {
