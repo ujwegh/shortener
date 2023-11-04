@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"io"
+	"log"
 )
 
 type FileStorage struct {
@@ -17,6 +18,7 @@ func NewFileStorage(filePath string) *FileStorage {
 	storage := FileStorage{
 		filePath: filePath,
 	}
+	log.Printf("FileStorage: %s", filePath)
 	if filePath != "" {
 		ls, err := storage.readAllShortenedURLs()
 		if err != nil {
