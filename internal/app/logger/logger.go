@@ -1,4 +1,4 @@
-package middlware
+package logger
 
 import (
 	"bytes"
@@ -9,19 +9,8 @@ import (
 
 var Log *zap.Logger = zap.NewNop()
 
-func LoggerInitialize(level string) error {
-	lvl, err := zap.ParseAtomicLevel(level)
-	if err != nil {
-		return err
-	}
-	cfg := zap.NewProductionConfig()
-	cfg.Level = lvl
-	zl, err := cfg.Build()
-	if err != nil {
-		return err
-	}
+func Initialize(zl *zap.Logger) {
 	Log = zl
-	return nil
 }
 
 type responseRecorder struct {
