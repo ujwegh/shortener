@@ -10,6 +10,7 @@ type AppConfig struct {
 	ShortenedURLAddr string `env:"BASE_URL"`
 	FileStoragePath  string `env:"FILE_STORAGE_PATH"`
 	LogLevel         string
+	DatabaseDSN      string
 }
 
 func ParseFlags() AppConfig {
@@ -31,6 +32,12 @@ func ParseFlags() AppConfig {
 		flag.StringVar(&config.ShortenedURLAddr, "b", defaultShortenedURLAddress, "address and port for shortened url")
 	}
 	flag.StringVar(&config.LogLevel, "ll", defaultLogLevel, "logging level")
+
+	databaseDSN, databaseDSNExist := os.LookupEnv("DATABASE_DSN")
+	config.DatabaseDSN = databaseDSN
+	if !databaseDSNExist {
+		flag.StringVar(&config.FileStoragePath, "d", defaultFileStoragePath, "database dsn")
+	}
 
 	flag.Parse()
 	return config
