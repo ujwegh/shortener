@@ -10,7 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ujwegh/shortener/internal/app/config"
-	dtos "github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/handlers"
+	"github.com/ujwegh/shortener/internal/app/service"
+	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,8 +22,11 @@ import (
 
 func TestRequestZipper(t *testing.T) {
 	// Setup
-	appConfig := config.AppConfig{}
-	router := NewAppRouter(appConfig)
+	c := config.AppConfig{}
+	s := storage.NewFileStorage(c.FileStoragePath)
+	ss := service.NewShortenerService(s)
+	us := handlers.NewShortenerHandlers(c.ShortenedURLAddr, ss)
+	router := NewAppRouter(us)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 
@@ -120,13 +125,13 @@ func TestRequestZipper(t *testing.T) {
 			if resp.StatusCode == http.StatusCreated {
 				contendEncoding := resp.Header.Get("Content-Encoding")
 				if strings.Contains(contendEncoding, "gzip") {
-					var respDto = &dtos.ShortenResponseDto{}
+					var respDto = &handlers.ShortenResponseDto{}
 					gr, err := gzip.NewReader(bytes.NewReader(body))
 					require.NoError(t, err)
 					err = easyjson.UnmarshalFromReader(gr, respDto)
 					require.NoError(t, err)
 				} else {
-					var respDto = &dtos.ShortenResponseDto{}
+					var respDto = &handlers.ShortenResponseDto{}
 					err = easyjson.Unmarshal(body, respDto)
 					require.NoError(t, err)
 				}
