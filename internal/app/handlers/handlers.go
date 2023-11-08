@@ -1,18 +1,22 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/mailru/easyjson"
 	"github.com/ujwegh/shortener/internal/app/service"
+	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
+	"time"
 )
 
 type (
 	ShortenerHandlers struct {
 		shortenerService service.ShortenerService
 		shortenedURLAddr string
+		storage          storage.Storage
 	}
 	//easyjson:json
 	ShortenRequestDto struct {
@@ -24,9 +28,10 @@ type (
 	}
 )
 
-func NewShortenerHandlers(shortenedURLAddr string, service service.ShortenerService) *ShortenerHandlers {
+func NewShortenerHandlers(shortenedURLAddr string, service service.ShortenerService, storage storage.Storage) *ShortenerHandlers {
 	return &ShortenerHandlers{
 		shortenerService: service,
+		storage:          storage,
 		shortenedURLAddr: shortenedURLAddr,
 	}
 }
@@ -98,4 +103,25 @@ func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.R
 	}
 	w.Header().Add("Location", originalURL)
 	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
+}
+
+func (us *ShortenerHandlers) Ping(writer http.ResponseWriter, request *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	err := us.storage.Ping(ctx)
+	if err != nil {
+		http.Error(writer, "Unable to ping storage", http.StatusInternalServerError)
+		return
+	}
+
+	switch ctx.Err() {
+	case context.Canceled:
+		http.Error(writer, "Request canceled", http.StatusInternalServerError)
+		return
+	case context.DeadlineExceeded:
+		http.Error(writer, "Timeout exceeded", http.StatusInternalServerError)
+		return
+	}
+
+	writer.WriteHeader(http.StatusOK)
 }

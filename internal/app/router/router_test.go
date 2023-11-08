@@ -25,7 +25,7 @@ func TestRequestZipper(t *testing.T) {
 	c := config.AppConfig{}
 	s := storage.NewFileStorage(c.FileStoragePath)
 	ss := service.NewShortenerService(s)
-	us := handlers.NewShortenerHandlers(c.ShortenedURLAddr, ss)
+	us := handlers.NewShortenerHandlers(c.ShortenedURLAddr, ss, s)
 	router := NewAppRouter(us)
 	ts := httptest.NewServer(router)
 	defer ts.Close()

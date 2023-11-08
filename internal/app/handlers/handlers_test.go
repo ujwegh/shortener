@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
+	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -17,6 +18,10 @@ import (
 
 type MockStorage struct {
 	urlMap map[string]model.ShortenedURL
+}
+
+func (fss *MockStorage) Ping(ctx context.Context) error {
+	return nil
 }
 
 func (fss *MockStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
@@ -88,9 +93,11 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 
 			urlMap := make(map[string]model.ShortenedURL)
+			storage := &MockStorage{urlMap: urlMap}
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
+				shortenerService: service.NewShortenerService(storage),
 				shortenedURLAddr: test.shortenedURLAddr,
+				storage:          storage,
 			}
 			us.ShortenURL(w, request)
 
@@ -290,6 +297,52 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			} else {
 				assert.Equal(t, test.want.response, string(body))
 			}
+		})
+	}
+}
+
+func TestShortenerHandlers_Ping(t *testing.T) {
+	type fields struct {
+		shortenerService service.ShortenerService
+		shortenedURLAddr string
+		storage          storage.Storage
+	}
+	type args struct {
+		writer  http.ResponseWriter
+		request *http.Request
+	}
+	storage := &MockStorage{}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		// TODO: Add test cases.
+		{
+			name: "positive ping test",
+			fields: fields{
+				shortenerService: service.NewShortenerService(storage),
+				shortenedURLAddr: "http://localhost:8080",
+				storage:          storage,
+			},
+			args: args{
+				writer:  httptest.NewRecorder(),
+				request: httptest.NewRequest(http.MethodGet, "/ping", nil),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			us := &ShortenerHandlers{
+				shortenerService: tt.fields.shortenerService,
+				shortenedURLAddr: tt.fields.shortenedURLAddr,
+				storage:          tt.fields.storage,
+			}
+			us.Ping(tt.args.writer, tt.args.request)
+			// assert response
+			res := tt.args.writer.(*httptest.ResponseRecorder).Result()
+			res.Body.Close()
+			assert.Equal(t, http.StatusOK, res.StatusCode)
 		})
 	}
 }

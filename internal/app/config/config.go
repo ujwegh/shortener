@@ -18,6 +18,7 @@ func ParseFlags() AppConfig {
 	defaultShortenedURLAddress := "http://localhost:8080"
 	defaultFileStoragePath := "/tmp/short-url-db.json"
 	defaultLogLevel := "info"
+	defaultDatabaseDSN := "postgres://postgres:postgres@localhost:5432/postgres"
 
 	config := AppConfig{}
 	fileStoragePath, fileStoragePathExist := os.LookupEnv("FILE_STORAGE_PATH")
@@ -36,7 +37,7 @@ func ParseFlags() AppConfig {
 	databaseDSN, databaseDSNExist := os.LookupEnv("DATABASE_DSN")
 	config.DatabaseDSN = databaseDSN
 	if !databaseDSNExist {
-		flag.StringVar(&config.FileStoragePath, "d", defaultFileStoragePath, "database dsn")
+		flag.StringVar(&config.DatabaseDSN, "d", defaultDatabaseDSN, "database dsn")
 	}
 
 	flag.Parse()

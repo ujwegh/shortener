@@ -15,6 +15,7 @@ func NewAppRouter(us *handlers.ShortenerHandlers) *chi.Mux {
 	r.Use(middlware.ResponseZipper)
 
 	r.Post("/", us.ShortenURL)
+	r.Get("/ping", us.Ping)
 	r.Post("/api/shorten", us.APIShortenURL)
 	r.Get("/{id}", us.HandleShortenedURL)
 	return r

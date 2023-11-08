@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/ujwegh/shortener/internal/app/model"
@@ -10,6 +11,10 @@ import (
 type FileStorage struct {
 	filePath string
 	urlMap   map[string]model.ShortenedURL
+}
+
+func (fss *FileStorage) Ping(ctx context.Context) error {
+	return fmt.Errorf("file storage doesn't support Ping() method")
 }
 
 func NewFileStorage(filePath string) *FileStorage {
