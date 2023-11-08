@@ -3,14 +3,31 @@ package handlers
 import (
 	"context"
 	"github.com/go-chi/chi/v5"
+	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/service"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+type MockStorage struct {
+	urlMap map[string]model.ShortenedURL
+}
+
+func (fss *MockStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
+	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
+	return nil
+}
+
+func (fss *MockStorage) ReadShortenedURL(shortURL string) (model.ShortenedURL, error) {
+	shortenedURL := fss.urlMap[shortURL]
+	return shortenedURL, nil
+}
 
 func TestUrlShortener_ShortenUrl(t *testing.T) {
 	type want struct {
@@ -70,9 +87,9 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			rctx := chi.NewRouteContext()
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 
-			var urlMap = make(map[string]string)
+			urlMap := make(map[string]model.ShortenedURL)
 			us := &ShortenerHandlers{
-				urlMap:           urlMap,
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
 				shortenedURLAddr: test.shortenedURLAddr,
 			}
 			us.ShortenURL(w, request)
@@ -97,6 +114,106 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 	}
 }
 
+func TestUrlShortener_APIShortenUrl(t *testing.T) {
+	type want struct {
+		code        int
+		response    string
+		contentType string
+	}
+	tests := []struct {
+		name             string
+		method           string
+		route            string
+		body             string
+		shortenedURLAddr string
+		want             want
+	}{
+		{
+			name:             "positive shorten url test",
+			route:            "/api/shorten",
+			method:           http.MethodPost,
+			body:             "{\"url\": \"https://google.com\"}",
+			shortenedURLAddr: "http://localhost:8080",
+			want: want{
+				code:        201,
+				response:    "http://localhost:8080/",
+				contentType: "application/json",
+			},
+		},
+		{
+			name:             "empty body",
+			method:           http.MethodPost,
+			route:            "/api/shorten",
+			body:             "",
+			shortenedURLAddr: "http://localhost:8080",
+			want: want{
+				code:        400,
+				contentType: "text/plain; charset=utf-8",
+				response:    "Unable to parse body\n",
+			},
+		},
+		{
+			name:             "empty route body",
+			method:           http.MethodPost,
+			route:            "/api/shorten",
+			body:             "{\"url\": \"\"}",
+			shortenedURLAddr: "http://localhost:8080",
+			want: want{
+				code:        400,
+				contentType: "text/plain; charset=utf-8",
+				response:    "URL is empty\n",
+			},
+		},
+		{
+			name:             "positive shorten url test",
+			route:            "/api/shorten",
+			method:           http.MethodPost,
+			body:             "{\"url\": \"https://google.com\"}",
+			shortenedURLAddr: "http://localhost:8090",
+			want: want{
+				code:        201,
+				response:    "http://localhost:8090/",
+				contentType: "application/json",
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			request := httptest.NewRequest(test.method, test.route, strings.NewReader(test.body))
+			rctx := chi.NewRouteContext()
+			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
+			request.Header.Set("Content-Type", "application/json")
+			var urlMap = make(map[string]model.ShortenedURL)
+			us := &ShortenerHandlers{
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
+				shortenedURLAddr: test.shortenedURLAddr,
+			}
+			us.APIShortenURL(w, request)
+
+			res := w.Result()
+			assert.Equal(t, test.want.code, res.StatusCode)
+			assert.Equal(t, test.want.contentType, res.Header.Get("Content-Type"))
+			body, err := io.ReadAll(res.Body)
+			require.NoError(t, err)
+			err2 := res.Body.Close()
+			require.NoError(t, err2)
+
+			if res.StatusCode == http.StatusCreated {
+				var response = &ShortenResponseDto{}
+				err := easyjson.Unmarshal(body, response)
+				assert.Nil(t, err)
+				split := strings.Split(response.Result, test.want.response)
+				assert.True(t, strings.Contains(test.want.response, split[0]))
+				assert.True(t, len(split[1]) == 8)
+				assert.Equal(t, 1, len(urlMap))
+			} else {
+				assert.Equal(t, test.want.response, string(body))
+			}
+		})
+	}
+}
+
 func TestURLShortener_HandleShortenedURL(t *testing.T) {
 	type want struct {
 		code        int
@@ -108,7 +225,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 	wrongKey := "wrongKey"
 	tests := []struct {
 		pathVar string
-		urlMap  map[string]string
+		urlMap  map[string]model.ShortenedURL
 		name    string
 		method  string
 		route   string
@@ -116,8 +233,10 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 		want    want
 	}{
 		{
-			urlMap: map[string]string{
-				key: targetURL,
+			urlMap: map[string]model.ShortenedURL{
+				key: {
+					OriginalURL: targetURL,
+				},
 			},
 			name:    "positive shorten url test",
 			pathVar: key,
@@ -130,8 +249,10 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			},
 		},
 		{
-			urlMap: map[string]string{
-				key: targetURL,
+			urlMap: map[string]model.ShortenedURL{
+				key: {
+					OriginalURL: targetURL,
+				},
 			},
 			name:    "sent wrong key",
 			pathVar: wrongKey,
@@ -152,7 +273,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			rctx.URLParams.Add("id", test.pathVar)
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &ShortenerHandlers{
-				urlMap: test.urlMap,
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: test.urlMap}),
 			}
 			us.HandleShortenedURL(w, request)
 

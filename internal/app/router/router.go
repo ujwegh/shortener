@@ -2,18 +2,20 @@ package router
 
 import (
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
-	"github.com/ujwegh/shortener/internal/app/config"
 	"github.com/ujwegh/shortener/internal/app/handlers"
+	"github.com/ujwegh/shortener/internal/app/middlware"
 )
 
-func NewAppRouter(config config.AppConfig) *chi.Mux {
+func NewAppRouter(us *handlers.ShortenerHandlers) *chi.Mux {
 	r := chi.NewRouter()
-	us := handlers.NewShortenerHandlers(config.ShortenedURLAddr)
 
-	r.Use(middleware.Logger)
+	r.Use(middlware.RequestLogger)
+	r.Use(middlware.ResponseLogger)
+	r.Use(middlware.RequestZipper)
+	r.Use(middlware.ResponseZipper)
 
 	r.Post("/", us.ShortenURL)
+	r.Post("/api/shorten", us.APIShortenURL)
 	r.Get("/{id}", us.HandleShortenedURL)
 	return r
 }
