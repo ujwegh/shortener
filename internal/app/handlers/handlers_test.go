@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/service"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -88,7 +89,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 
 			urlMap := make(map[string]model.ShortenedURL)
 			us := &ShortenerHandlers{
-				storage:          &MockStorage{urlMap: urlMap},
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
 				shortenedURLAddr: test.shortenedURLAddr,
 			}
 			us.ShortenURL(w, request)
@@ -185,7 +186,7 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			request.Header.Set("Content-Type", "application/json")
 			var urlMap = make(map[string]model.ShortenedURL)
 			us := &ShortenerHandlers{
-				storage:          &MockStorage{urlMap: urlMap},
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
 				shortenedURLAddr: test.shortenedURLAddr,
 			}
 			us.APIShortenURL(w, request)
@@ -199,7 +200,7 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			require.NoError(t, err2)
 
 			if res.StatusCode == http.StatusCreated {
-				var response = &model.ShortenResponseDto{}
+				var response = &ShortenResponseDto{}
 				err := easyjson.Unmarshal(body, response)
 				assert.Nil(t, err)
 				split := strings.Split(response.Result, test.want.response)
@@ -272,7 +273,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			rctx.URLParams.Add("id", test.pathVar)
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &ShortenerHandlers{
-				storage: &MockStorage{urlMap: test.urlMap},
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: test.urlMap}),
 			}
 			us.HandleShortenedURL(w, request)
 

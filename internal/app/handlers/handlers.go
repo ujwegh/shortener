@@ -1,25 +1,32 @@
 package handlers
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/mailru/easyjson"
-	"github.com/ujwegh/shortener/internal/app/model"
-	"github.com/ujwegh/shortener/internal/app/storage"
+	"github.com/ujwegh/shortener/internal/app/service"
 	"io"
 	"net/http"
 )
 
-type ShortenerHandlers struct {
-	storage          storage.Storage
-	shortenedURLAddr string
-}
+type (
+	ShortenerHandlers struct {
+		shortenerService service.ShortenerService
+		shortenedURLAddr string
+	}
+	//easyjson:json
+	ShortenRequestDto struct {
+		URL string `json:"url"`
+	}
+	//easyjson:json
+	ShortenResponseDto struct {
+		Result string `json:"result"`
+	}
+)
 
-func NewShortenerHandlers(shortenedURLAddr string, s storage.Storage) *ShortenerHandlers {
+func NewShortenerHandlers(shortenedURLAddr string, service service.ShortenerService) *ShortenerHandlers {
 	return &ShortenerHandlers{
-		storage:          s,
+		shortenerService: service,
 		shortenedURLAddr: shortenedURLAddr,
 	}
 }
@@ -35,19 +42,14 @@ func (us *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Url is empty", http.StatusBadRequest)
 		return
 	}
-	shortURL := generateKey()
-	shortenedURL := &model.ShortenedURL{
-		ShortURL:    shortURL,
-		OriginalURL: originalURL,
-	}
-	err = us.storage.WriteShortenedURL(shortenedURL)
+	shortenedURL, err := us.shortenerService.CreateShortenedURL(originalURL)
 	if err != nil {
-		http.Error(w, "Unable to write shortened URL", http.StatusInternalServerError)
+		http.Error(w, "Unable to create shortened URL", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortURL)
+	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortenedURL.ShortURL)
 }
 
 func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Request) {
@@ -56,7 +58,7 @@ func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Unable to read body", http.StatusBadRequest)
 		return
 	}
-	request := model.ShortenRequestDto{}
+	request := ShortenRequestDto{}
 	err = easyjson.Unmarshal(body, &request)
 	if err != nil {
 		http.Error(w, "Unable to parse body", http.StatusBadRequest)
@@ -66,17 +68,12 @@ func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "URL is empty", http.StatusBadRequest)
 		return
 	}
-	shortURL := generateKey()
-	shortenedURL := &model.ShortenedURL{
-		ShortURL:    shortURL,
-		OriginalURL: request.URL,
-	}
-	err = us.storage.WriteShortenedURL(shortenedURL)
+	shortenedURL, err := us.shortenerService.CreateShortenedURL(request.URL)
 	if err != nil {
-		http.Error(w, "Unable to write shortened URL", http.StatusInternalServerError)
+		http.Error(w, "Unable to create shortened URL", http.StatusInternalServerError)
 		return
 	}
-	response := &model.ShortenResponseDto{Result: fmt.Sprintf("%s/%s", us.shortenedURLAddr, shortenedURL.ShortURL)}
+	response := &ShortenResponseDto{Result: fmt.Sprintf("%s/%s", us.shortenedURLAddr, shortenedURL.ShortURL)}
 	rawBytes, err := easyjson.Marshal(response)
 	if err != nil {
 		http.Error(w, "Unable to marshal response", http.StatusInternalServerError)
@@ -89,9 +86,9 @@ func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 
 func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
 	shortKey := chi.URLParam(r, "id")
-	shortenedURL, err := us.storage.ReadShortenedURL(shortKey)
+	shortenedURL, err := us.shortenerService.GetShortenedURL(shortKey)
 	if err != nil {
-		http.Error(w, "Unable to read shortened URL", http.StatusInternalServerError)
+		http.Error(w, "Unable to get shortened URL", http.StatusInternalServerError)
 		return
 	}
 	originalURL := shortenedURL.OriginalURL
@@ -101,13 +98,4 @@ func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.R
 	}
 	w.Header().Add("Location", originalURL)
 	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
-}
-
-func generateKey() string {
-	buf := make([]byte, 6)
-	_, err := rand.Read(buf)
-	if err != nil {
-		return ""
-	}
-	return base64.RawURLEncoding.EncodeToString(buf)
 }
