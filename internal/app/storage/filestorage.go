@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"github.com/google/uuid"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"io"
 )
@@ -59,8 +58,6 @@ func (fss *FileStorage) readAllShortenedURLs() ([]model.ShortenedURL, error) {
 
 func (fss *FileStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
 	if fss.filePath != "" {
-		shortenedURL.UUID = uuid.New()
-
 		producer, err := newProducer(fss.filePath)
 		if err != nil {
 			return fmt.Errorf("can't create Producer: %w", err)
@@ -76,7 +73,7 @@ func (fss *FileStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) erro
 	return nil
 }
 
-func (fss *FileStorage) ReadShortenedURL(shortURL string) (model.ShortenedURL, error) {
+func (fss *FileStorage) ReadShortenedURL(shortURL string) (*model.ShortenedURL, error) {
 	shortenedURL := fss.urlMap[shortURL]
-	return shortenedURL, nil
+	return &shortenedURL, nil
 }

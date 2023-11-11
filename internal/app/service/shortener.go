@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"github.com/google/uuid"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/storage"
 )
@@ -27,6 +28,7 @@ func (service *ShortenerServiceImpl) CreateShortenedURL(originalURL string) (*mo
 
 	shortURL := generateKey()
 	shortenedURL := &model.ShortenedURL{
+		UUID:        uuid.New(),
 		ShortURL:    shortURL,
 		OriginalURL: originalURL,
 	}
@@ -42,7 +44,7 @@ func (service *ShortenerServiceImpl) GetShortenedURL(shortURL string) (*model.Sh
 	if err != nil {
 		return nil, err
 	}
-	return &shortenedURL, nil
+	return shortenedURL, nil
 }
 
 func generateKey() string {

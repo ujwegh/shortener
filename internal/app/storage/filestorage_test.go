@@ -38,7 +38,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 		name    string
 		fields  fields
 		args    args
-		want    model.ShortenedURL
+		want    *model.ShortenedURL
 		wantErr bool
 	}{
 		{
@@ -49,7 +49,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 			args: args{
 				shortURL: "edVPg3ks",
 			},
-			want: model.ShortenedURL{
+			want: &model.ShortenedURL{
 				UUID:        uid,
 				ShortURL:    "edVPg3ks",
 				OriginalURL: "http://ya.ru",
