@@ -18,7 +18,7 @@ func ParseFlags() AppConfig {
 	defaultShortenedURLAddress := "http://localhost:8080"
 	defaultFileStoragePath := "/tmp/short-url-db.json"
 	defaultLogLevel := "info"
-	defaultDatabaseDSN := "postgres://postgres:postgres@localhost:5432/postgres"
+	defaultDatabaseDSN := ""
 
 	config := AppConfig{}
 	fileStoragePath, fileStoragePathExist := os.LookupEnv("FILE_STORAGE_PATH")
