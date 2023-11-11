@@ -29,9 +29,9 @@ func (fss *MockStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) erro
 	return nil
 }
 
-func (fss *MockStorage) ReadShortenedURL(shortURL string) (model.ShortenedURL, error) {
+func (fss *MockStorage) ReadShortenedURL(shortURL string) (*model.ShortenedURL, error) {
 	shortenedURL := fss.urlMap[shortURL]
-	return shortenedURL, nil
+	return &shortenedURL, nil
 }
 
 func TestUrlShortener_ShortenUrl(t *testing.T) {
