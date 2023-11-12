@@ -6,40 +6,59 @@ import (
 )
 
 type AppConfig struct {
-	ServerAddr       string `env:"SERVER_ADDRESS"`
-	ShortenedURLAddr string `env:"BASE_URL"`
-	FileStoragePath  string `env:"FILE_STORAGE_PATH"`
-	LogLevel         string
-	DatabaseDSN      string
+	ServerAddr        string
+	ShortenedURLAddr  string
+	FileStoragePath   string
+	LogLevel          string
+	DatabaseDSN       string
+	ContextTimeoutSec int
 }
 
 func ParseFlags() AppConfig {
-	defaultServerAddress := "localhost:8080"
-	defaultShortenedURLAddress := "http://localhost:8080"
-	defaultFileStoragePath := "/tmp/short-url-db.json"
-	defaultLogLevel := "info"
-	defaultDatabaseDSN := "" //postgres://postgres:mysecretpassword@localhost:5432/postgres
+	// Define defaults
+	const (
+		defaultServerAddress       = "localhost:8080"
+		defaultShortenedURLAddress = "http://localhost:8080"
+		defaultFileStoragePath     = "/tmp/short-url-db.json"
+		defaultLogLevel            = "info"
+		defaultDatabaseDSN         = "" //postgres://postgres:mysecretpassword@localhost:5432/postgres
+		defaultContextTimeoutSec   = 5
+	)
 
-	config := AppConfig{}
-	fileStoragePath, fileStoragePathExist := os.LookupEnv("FILE_STORAGE_PATH")
-	config.FileStoragePath = fileStoragePath
-	if !fileStoragePathExist {
-		flag.StringVar(&config.FileStoragePath, "f", defaultFileStoragePath, "file storage path")
-	}
-	if config.ServerAddr == "" {
-		flag.StringVar(&config.ServerAddr, "a", defaultServerAddress, "address and port to run server")
-	}
-	if config.ShortenedURLAddr == "" {
-		flag.StringVar(&config.ShortenedURLAddr, "b", defaultShortenedURLAddress, "address and port for shortened url")
-	}
-	flag.StringVar(&config.LogLevel, "ll", defaultLogLevel, "logging level")
-
-	databaseDSN, databaseDSNExist := os.LookupEnv("DATABASE_DSN")
-	config.DatabaseDSN = databaseDSN
-	if !databaseDSNExist {
-		flag.StringVar(&config.DatabaseDSN, "d", defaultDatabaseDSN, "database dsn")
+	// Initialize AppConfig with defaults
+	config := AppConfig{
+		ServerAddr:        defaultServerAddress,
+		ShortenedURLAddr:  defaultShortenedURLAddress,
+		FileStoragePath:   defaultFileStoragePath,
+		LogLevel:          defaultLogLevel,
+		DatabaseDSN:       defaultDatabaseDSN,
+		ContextTimeoutSec: defaultContextTimeoutSec,
 	}
 
+	// Set flags
+	flag.StringVar(&config.ServerAddr, "a", config.ServerAddr, "address and port to run server")
+	flag.StringVar(&config.ShortenedURLAddr, "b", config.ShortenedURLAddr, "address and port for shortened url")
+	flag.StringVar(&config.LogLevel, "ll", config.LogLevel, "logging level")
+	flag.StringVar(&config.FileStoragePath, "f", config.FileStoragePath, "file storage path")
+	flag.StringVar(&config.DatabaseDSN, "d", config.DatabaseDSN, "database dsn")
 	flag.Parse()
+
+	// Override with environment variables if they exist
+	if envVal := os.Getenv("SERVER_ADDRESS"); envVal != "" {
+		config.ServerAddr = envVal
+	}
+	if envVal := os.Getenv("BASE_URL"); envVal != "" {
+		config.ShortenedURLAddr = envVal
+	}
+	if envVal := os.Getenv("LOG_LEVEL"); envVal != "" {
+		config.LogLevel = envVal
+	}
+	if envVal := os.Getenv("FILE_STORAGE_PATH"); envVal != "" {
+		config.FileStoragePath = envVal
+	}
+	if envVal := os.Getenv("DATABASE_DSN"); envVal != "" {
+		config.DatabaseDSN = envVal
+	}
+
 	return config
 }
