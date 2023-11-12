@@ -36,6 +36,9 @@ func (storage *DBStorage) ReadShortenedURL(ctx context.Context, shortURL string)
 	query := `SELECT uuid, short_url, original_url FROM shortened_urls WHERE short_url = $1;`
 	stmt, err := storage.db.PrepareContext(ctx, query)
 	defer stmt.Close()
+	if err != nil {
+		return nil, fmt.Errorf("prepare statement: %w", err)
+	}
 	row := stmt.QueryRowContext(ctx, shortURL)
 	var shortenedURL model.ShortenedURL
 	err = row.Scan(&shortenedURL.UUID, &shortenedURL.ShortURL, &shortenedURL.OriginalURL)
