@@ -17,20 +17,28 @@ func NewDBStorage(db *sql.DB) *DBStorage {
 }
 
 func (storage *DBStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
-	query := `INSERT INTO shortened_urls (uuid, short_url, original_url) VALUES ($1, $2, $3);`
-	_, err := storage.db.ExecContext(ctx, query, shortenedURL.UUID, shortenedURL.ShortURL, shortenedURL.OriginalURL)
+	tx, err := storage.db.Begin()
 	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	query := `INSERT INTO shortened_urls (uuid, short_url, original_url) VALUES ($1, $2, $3);`
+	_, err = storage.db.ExecContext(ctx, query, shortenedURL.UUID, shortenedURL.ShortURL, shortenedURL.OriginalURL)
+	if err != nil {
+		if err := tx.Rollback(); err != nil {
+			return fmt.Errorf("rollback transaction: %w", err)
+		}
 		return fmt.Errorf("write shortened URL: %w", err)
 	}
-	return nil
+	return tx.Commit()
 }
 
 func (storage *DBStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
 	query := `SELECT uuid, short_url, original_url FROM shortened_urls WHERE short_url = $1;`
-	row := storage.db.QueryRowContext(ctx, query, shortURL)
-
+	stmt, err := storage.db.PrepareContext(ctx, query)
+	defer stmt.Close()
+	row := stmt.QueryRowContext(ctx, shortURL)
 	var shortenedURL model.ShortenedURL
-	err := row.Scan(&shortenedURL.UUID, &shortenedURL.ShortURL, &shortenedURL.OriginalURL)
+	err = row.Scan(&shortenedURL.UUID, &shortenedURL.ShortURL, &shortenedURL.OriginalURL)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("shortened URL not found")

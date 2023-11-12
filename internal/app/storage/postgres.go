@@ -10,6 +10,7 @@ import (
 
 func Open(dataSourceName string) *sql.DB {
 	db, err := sql.Open("pgx", dataSourceName)
+	db.SetMaxOpenConns(10)
 	if err != nil {
 		panic(err)
 	}
