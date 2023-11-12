@@ -56,7 +56,7 @@ func (fss *FileStorage) readAllShortenedURLs() ([]model.ShortenedURL, error) {
 	return shortenedURLs, nil
 }
 
-func (fss *FileStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
+func (fss *FileStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
 	if fss.filePath != "" {
 		producer, err := newProducer(fss.filePath)
 		if err != nil {
@@ -64,16 +64,26 @@ func (fss *FileStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) erro
 		}
 		defer producer.close()
 
-		err = producer.writeObject(shortenedURL)
-		if err != nil {
-			return fmt.Errorf("can't write shortened URL: %w", err)
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			err = producer.writeObject(shortenedURL)
+			if err != nil {
+				return fmt.Errorf("can't write shortened URL: %w", err)
+			}
 		}
 	}
 	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
 	return nil
 }
 
-func (fss *FileStorage) ReadShortenedURL(shortURL string) (*model.ShortenedURL, error) {
-	shortenedURL := fss.urlMap[shortURL]
-	return &shortenedURL, nil
+func (fss *FileStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+		shortenedURL := fss.urlMap[shortURL]
+		return &shortenedURL, nil
+	}
 }

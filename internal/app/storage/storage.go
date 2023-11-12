@@ -6,7 +6,7 @@ import (
 )
 
 type Storage interface {
-	WriteShortenedURL(shortenedURL *model.ShortenedURL) error
-	ReadShortenedURL(shortURL string) (*model.ShortenedURL, error)
+	WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error
+	ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error)
 	Ping(ctx context.Context) error
 }

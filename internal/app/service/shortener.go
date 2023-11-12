@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"github.com/google/uuid"
@@ -10,8 +11,8 @@ import (
 
 type (
 	ShortenerService interface {
-		CreateShortenedURL(originalURL string) (*model.ShortenedURL, error)
-		GetShortenedURL(shortURL string) (*model.ShortenedURL, error)
+		CreateShortenedURL(ctx context.Context, originalURL string) (*model.ShortenedURL, error)
+		GetShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error)
 	}
 	ShortenerServiceImpl struct {
 		storage storage.Storage
@@ -24,7 +25,7 @@ func NewShortenerService(storage storage.Storage) *ShortenerServiceImpl {
 	}
 }
 
-func (service *ShortenerServiceImpl) CreateShortenedURL(originalURL string) (*model.ShortenedURL, error) {
+func (service *ShortenerServiceImpl) CreateShortenedURL(ctx context.Context, originalURL string) (*model.ShortenedURL, error) {
 
 	shortURL := generateKey()
 	shortenedURL := &model.ShortenedURL{
@@ -32,15 +33,15 @@ func (service *ShortenerServiceImpl) CreateShortenedURL(originalURL string) (*mo
 		ShortURL:    shortURL,
 		OriginalURL: originalURL,
 	}
-	err := service.storage.WriteShortenedURL(shortenedURL)
+	err := service.storage.WriteShortenedURL(ctx, shortenedURL)
 	if err != nil {
 		return nil, err
 	}
 	return shortenedURL, nil
 }
 
-func (service *ShortenerServiceImpl) GetShortenedURL(shortURL string) (*model.ShortenedURL, error) {
-	shortenedURL, err := service.storage.ReadShortenedURL(shortURL)
+func (service *ShortenerServiceImpl) GetShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
+	shortenedURL, err := service.storage.ReadShortenedURL(ctx, shortURL)
 	if err != nil {
 		return nil, err
 	}

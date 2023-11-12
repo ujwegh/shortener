@@ -24,12 +24,12 @@ func (fss *MockStorage) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (fss *MockStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
+func (fss *MockStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
 	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
 	return nil
 }
 
-func (fss *MockStorage) ReadShortenedURL(shortURL string) (*model.ShortenedURL, error) {
+func (fss *MockStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
 	shortenedURL := fss.urlMap[shortURL]
 	return &shortenedURL, nil
 }

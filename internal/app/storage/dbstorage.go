@@ -16,18 +16,18 @@ func NewDBStorage(db *sql.DB) *DBStorage {
 	return &DBStorage{db: db}
 }
 
-func (storage *DBStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
+func (storage *DBStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
 	query := `INSERT INTO shortened_urls (uuid, short_url, original_url) VALUES ($1, $2, $3);`
-	_, err := storage.db.Exec(query, shortenedURL.UUID, shortenedURL.ShortURL, shortenedURL.OriginalURL)
+	_, err := storage.db.ExecContext(ctx, query, shortenedURL.UUID, shortenedURL.ShortURL, shortenedURL.OriginalURL)
 	if err != nil {
 		return fmt.Errorf("write shortened URL: %w", err)
 	}
 	return nil
 }
 
-func (storage *DBStorage) ReadShortenedURL(shortURL string) (*model.ShortenedURL, error) {
+func (storage *DBStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
 	query := `SELECT uuid, short_url, original_url FROM shortened_urls WHERE short_url = $1;`
-	row := storage.db.QueryRow(query, shortURL)
+	row := storage.db.QueryRowContext(ctx, query, shortURL)
 
 	var shortenedURL model.ShortenedURL
 	err := row.Scan(&shortenedURL.UUID, &shortenedURL.ShortURL, &shortenedURL.OriginalURL)
