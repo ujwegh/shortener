@@ -9,4 +9,5 @@ type Storage interface {
 	WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error
 	ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error)
 	Ping(ctx context.Context) error
+	WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error
 }

@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"io"
+	"sync"
 )
 
 type FileStorage struct {
 	filePath string
 	urlMap   map[string]model.ShortenedURL
+	mutex    sync.Mutex
 }
 
-func (fss *FileStorage) Ping(ctx context.Context) error {
+func (fs *FileStorage) Ping(ctx context.Context) error {
 	return fmt.Errorf("file storage doesn't support Ping() method")
 }
 
@@ -34,8 +36,10 @@ func NewFileStorage(filePath string) *FileStorage {
 	return &storage
 }
 
-func (fss *FileStorage) readAllShortenedURLs() ([]model.ShortenedURL, error) {
-	consumer, err := newConsumer(fss.filePath)
+func (fs *FileStorage) readAllShortenedURLs() ([]model.ShortenedURL, error) {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	consumer, err := newConsumer(fs.filePath)
 	if err != nil {
 		return nil, fmt.Errorf("can't create Consumer: %w", err)
 	}
@@ -56,9 +60,11 @@ func (fss *FileStorage) readAllShortenedURLs() ([]model.ShortenedURL, error) {
 	return shortenedURLs, nil
 }
 
-func (fss *FileStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
-	if fss.filePath != "" {
-		producer, err := newProducer(fss.filePath)
+func (fs *FileStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+	if fs.filePath != "" {
+		producer, err := newProducer(fs.filePath)
 		if err != nil {
 			return fmt.Errorf("can't create Producer: %w", err)
 		}
@@ -74,16 +80,45 @@ func (fss *FileStorage) WriteShortenedURL(ctx context.Context, shortenedURL *mod
 			}
 		}
 	}
-	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
+	fs.urlMap[shortenedURL.ShortURL] = *shortenedURL
 	return nil
 }
 
-func (fss *FileStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
+func (fs *FileStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	default:
-		shortenedURL := fss.urlMap[shortURL]
+		shortenedURL := fs.urlMap[shortURL]
 		return &shortenedURL, nil
 	}
+}
+
+func (fs *FileStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error {
+	fs.mutex.Lock()
+	defer fs.mutex.Unlock()
+
+	if fs.filePath != "" {
+		producer, err := newProducer(fs.filePath)
+		if err != nil {
+			return fmt.Errorf("can't create Producer: %w", err)
+		}
+		defer producer.close()
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			for _, shortenedURL := range slice {
+				err = producer.writeObject(shortenedURL)
+				if err != nil {
+					return fmt.Errorf("can't write shortened URL: %w", err)
+				}
+			}
+		}
+	}
+	for _, shortenedURL := range slice {
+		fs.urlMap[shortenedURL.ShortURL] = shortenedURL
+	}
+	return nil
 }

@@ -14,6 +14,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type MockStorage struct {
@@ -32,6 +33,13 @@ func (fss *MockStorage) WriteShortenedURL(ctx context.Context, shortenedURL *mod
 func (fss *MockStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
 	shortenedURL := fss.urlMap[shortURL]
 	return &shortenedURL, nil
+}
+
+func (fss *MockStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error {
+	for _, shortenedURL := range slice {
+		fss.urlMap[shortenedURL.ShortURL] = shortenedURL
+	}
+	return nil
 }
 
 func TestUrlShortener_ShortenUrl(t *testing.T) {
@@ -98,6 +106,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 				shortenerService: service.NewShortenerService(storage),
 				shortenedURLAddr: test.shortenedURLAddr,
 				storage:          storage,
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.ShortenURL(w, request)
 
@@ -192,9 +201,12 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			request.Header.Set("Content-Type", "application/json")
 			var urlMap = make(map[string]model.ShortenedURL)
+			s := &MockStorage{urlMap: urlMap}
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
+				shortenerService: service.NewShortenerService(s),
 				shortenedURLAddr: test.shortenedURLAddr,
+				storage:          s,
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.APIShortenURL(w, request)
 
@@ -281,6 +293,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &ShortenerHandlers{
 				shortenerService: service.NewShortenerService(&MockStorage{urlMap: test.urlMap}),
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.HandleShortenedURL(w, request)
 
@@ -337,6 +350,7 @@ func TestShortenerHandlers_Ping(t *testing.T) {
 				shortenerService: tt.fields.shortenerService,
 				shortenedURLAddr: tt.fields.shortenedURLAddr,
 				storage:          tt.fields.storage,
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.Ping(tt.args.writer, tt.args.request)
 			// assert response

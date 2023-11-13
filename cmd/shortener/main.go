@@ -28,12 +28,12 @@ func main() {
 		}
 		dbs := storage.NewDBStorage(db)
 		ss := service.NewShortenerService(dbs)
-		us = handlers.NewShortenerHandlers(c.ShortenedURLAddr, ss, dbs)
+		us = handlers.NewShortenerHandlers(c.ShortenedURLAddr, c.ContextTimeoutSec, ss, dbs)
 	} else {
 		logger.Log.Info("Using in-memory storage.")
 		fs := storage.NewFileStorage(c.FileStoragePath)
 		ss := service.NewShortenerService(fs)
-		us = handlers.NewShortenerHandlers(c.ShortenedURLAddr, ss, fs)
+		us = handlers.NewShortenerHandlers(c.ShortenedURLAddr, c.ContextTimeoutSec, ss, fs)
 	}
 
 	r := router.NewAppRouter(us)
