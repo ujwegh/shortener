@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/go-chi/chi/v5"
 	"github.com/ujwegh/shortener/internal/app/model"
@@ -210,7 +211,7 @@ func mapShortenedURLToExternalResponse(sh *ShortenerHandlers, slice []model.Shor
 	var responseSlice []ExternalShortenedURLResponseDto
 	for _, item := range slice {
 		responseItem := ExternalShortenedURLResponseDto{
-			CorrelationID: item.CorrelationID,
+			CorrelationID: item.CorrelationID.String,
 			ShortURL:      fmt.Sprintf("%s/%s", sh.shortenedURLAddr, item.ShortURL),
 		}
 		responseSlice = append(responseSlice, responseItem)
@@ -222,8 +223,11 @@ func mapExternalRequestToShortenedURL(slice []ExternalShortenedURLRequestDto) *[
 	var shortenedURLs []model.ShortenedURL
 	for _, item := range slice {
 		shortenedURL := model.ShortenedURL{
-			CorrelationID: item.CorrelationID,
-			OriginalURL:   item.OriginalURL,
+			CorrelationID: sql.NullString{
+				String: item.CorrelationID,
+				Valid:  true,
+			},
+			OriginalURL: item.OriginalURL,
 		}
 		shortenedURLs = append(shortenedURLs, shortenedURL)
 	}

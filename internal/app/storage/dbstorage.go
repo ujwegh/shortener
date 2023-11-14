@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
 	"github.com/ujwegh/shortener/internal/app/model"
 )
@@ -22,8 +24,8 @@ func (storage *DBStorage) WriteShortenedURL(ctx context.Context, shortenedURL *m
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	query := `INSERT INTO shortened_urls (uuid, short_url, original_url) VALUES ($1, $2, $3);`
-	stmt, err := storage.db.PrepareContext(ctx, query)
+	insertQuery := `INSERT INTO shortened_urls (uuid, short_url, original_url) VALUES ($1, $2, $3);`
+	stmt, err := storage.db.PrepareContext(ctx, insertQuery)
 	if err != nil {
 		return fmt.Errorf("prepare statement: %w", err)
 	}
@@ -31,6 +33,15 @@ func (storage *DBStorage) WriteShortenedURL(ctx context.Context, shortenedURL *m
 
 	_, err = stmt.ExecContext(ctx, shortenedURL.UUID, shortenedURL.ShortURL, shortenedURL.OriginalURL)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+			getQuery := `SELECT uuid, short_url, original_url, correlation_id FROM shortened_urls su WHERE original_url = $1;`
+			err := storage.db.GetContext(ctx, shortenedURL, getQuery, shortenedURL.OriginalURL)
+			if err != nil {
+				return fmt.Errorf("query existing URL after unique violation: %w", err)
+			}
+			return tx.Commit()
+		}
 		if err := tx.Rollback(); err != nil {
 			return fmt.Errorf("rollback transaction: %w", err)
 		}
