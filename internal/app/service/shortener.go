@@ -13,7 +13,7 @@ import (
 type (
 	ShortenerService interface {
 		CreateShortenedURL(ctx context.Context, originalURL string) (*model.ShortenedURL, error)
-		GetShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error)
+		GetShortenedURL(ctx context.Context, url string) (*model.ShortenedURL, error)
 		BatchCreateShortenedURLs(ctx context.Context, dtos []model.ShortenedURL) (*[]model.ShortenedURL, error)
 	}
 	ShortenerServiceImpl struct {
@@ -43,10 +43,9 @@ func (ss *ShortenerServiceImpl) CreateShortenedURL(ctx context.Context, original
 	return shortenedURL, nil
 }
 
-func (ss *ShortenerServiceImpl) GetShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
-	shortenedURL, err := ss.storage.ReadShortenedURL(ctx, shortURL)
+func (ss *ShortenerServiceImpl) GetShortenedURL(ctx context.Context, url string) (*model.ShortenedURL, error) {
+	shortenedURL, err := ss.storage.ReadShortenedURL(ctx, url)
 	if err != nil {
-		println("error: %v", err)
 		fmt.Printf("error: %v", err)
 		return nil, err
 	}

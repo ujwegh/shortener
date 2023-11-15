@@ -360,3 +360,88 @@ func TestShortenerHandlers_Ping(t *testing.T) {
 		})
 	}
 }
+
+func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
+	type fields struct {
+		shortenerService service.ShortenerService
+		shortenedURLAddr string
+		storage          storage.Storage
+		contextTimeout   time.Duration
+	}
+	type args struct {
+		w http.ResponseWriter
+		r *http.Request
+	}
+	urlMap := make(map[string]model.ShortenedURL)
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		responseURL string
+		wantErr     bool
+	}{
+		{
+			name: "positive shorten url batch test",
+			fields: fields{
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap}),
+				shortenedURLAddr: "http://localhost:8080",
+				storage:          &MockStorage{urlMap},
+				contextTimeout:   time.Duration(2) * time.Second,
+			},
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodPost,
+					"/api/shorten/batch",
+					strings.NewReader(`
+						[
+							{
+								"correlation_id": "1",
+								"original_url": "https://google.com"
+							},
+							{
+								"correlation_id": "2",
+								"original_url": "https://ya.ru"
+							},
+							{
+								"correlation_id": "3",	
+								"original_url": "https://apple.com"
+							}
+						]
+			`)),
+			},
+			responseURL: "http://localhost:8080/",
+			wantErr:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sh := &ShortenerHandlers{
+				shortenerService: tt.fields.shortenerService,
+				shortenedURLAddr: tt.fields.shortenedURLAddr,
+				storage:          tt.fields.storage,
+				contextTimeout:   tt.fields.contextTimeout,
+			}
+			sh.APIShortenURLBatch(tt.args.w, tt.args.r)
+			// assert response
+			if !tt.wantErr {
+				res := tt.args.w.(*httptest.ResponseRecorder).Result()
+				assert.Equal(t, http.StatusCreated, res.StatusCode)
+				body, err := io.ReadAll(res.Body)
+				require.NoError(t, err)
+				err2 := res.Body.Close()
+				require.NoError(t, err2)
+
+				response := ExternalShortenedURLResponseDtoSlice{}
+				err = response.UnmarshalJSON(body)
+				if err != nil {
+					assert.Fail(t, err.Error())
+				}
+				var dtos []ExternalShortenedURLResponseDto = response
+
+				for i := 0; i < len(dtos); i++ {
+					assert.Equal(t, 8, len(strings.Split(dtos[i].ShortURL, tt.responseURL)[1]))
+				}
+			}
+		})
+	}
+}

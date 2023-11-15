@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
+	appErrors "github.com/ujwegh/shortener/internal/app/errors"
 	"github.com/ujwegh/shortener/internal/app/model"
 )
 
@@ -35,12 +36,7 @@ func (storage *DBStorage) WriteShortenedURL(ctx context.Context, shortenedURL *m
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
-			getQuery := `SELECT uuid, short_url, original_url, correlation_id FROM shortened_urls su WHERE original_url = $1;`
-			err := storage.db.GetContext(ctx, shortenedURL, getQuery, shortenedURL.OriginalURL)
-			if err != nil {
-				return fmt.Errorf("query existing URL after unique violation: %w", err)
-			}
-			return tx.Commit()
+			return appErrors.New(err, "unique violation")
 		}
 		if err := tx.Rollback(); err != nil {
 			return fmt.Errorf("rollback transaction: %w", err)
@@ -50,10 +46,11 @@ func (storage *DBStorage) WriteShortenedURL(ctx context.Context, shortenedURL *m
 	return tx.Commit()
 }
 
-func (storage *DBStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
-	query := `SELECT uuid, short_url, original_url, correlation_id FROM shortened_urls WHERE short_url = $1;`
+func (storage *DBStorage) ReadShortenedURL(ctx context.Context, url string) (*model.ShortenedURL, error) {
+	query := `SELECT uuid, short_url, original_url, correlation_id
+	FROM shortened_urls WHERE short_url = $1 or original_url = $1;`
 	shortenedURL := &model.ShortenedURL{}
-	err := storage.db.GetContext(ctx, shortenedURL, query, shortURL)
+	err := storage.db.GetContext(ctx, shortenedURL, query, url)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("shortened URL not found")

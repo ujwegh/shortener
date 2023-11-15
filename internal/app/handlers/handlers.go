@@ -3,8 +3,10 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	appErrors "github.com/ujwegh/shortener/internal/app/errors"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
 	"github.com/ujwegh/shortener/internal/app/storage"
@@ -44,6 +46,9 @@ type (
 	ExternalShortenedURLResponseDtoSlice []ExternalShortenedURLResponseDto
 )
 
+const errMsgCreateShortURL = "Unable to create shortened URL"
+const errMsgEnableReadBody = "Unable to read body"
+
 func NewShortenerHandlers(shortenedURLAddr string, contextTimeout int, service service.ShortenerService, storage storage.Storage) *ShortenerHandlers {
 	return &ShortenerHandlers{
 		shortenerService: service,
@@ -58,7 +63,7 @@ func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Unable to read body", http.StatusBadRequest)
+		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
 		return
 	}
 	originalURL := string(body)
@@ -66,17 +71,31 @@ func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Url is empty", http.StatusBadRequest)
 		return
 	}
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
 	if err != nil {
-		http.Error(w, "Unable to create shortened URL", http.StatusInternalServerError)
+		shortenerError := appErrors.ShortenerError{}
+		if errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
+			shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
+			if err != nil {
+				http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusConflict)
+		} else {
+			http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+			return
+		}
+	} else {
+		w.WriteHeader(http.StatusCreated)
+	}
+	if err != nil {
+		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
 		return
 	}
 	if contextHasError(w, ctx) {
 		return
 	}
-
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s/%s", sh.shortenedURLAddr, shortenedURL.ShortURL)
 }
 
@@ -85,7 +104,7 @@ func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 	defer cancel()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Unable to read body", http.StatusBadRequest)
+		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
 		return
 	}
 	request := ShortenRequestDto{}
@@ -94,14 +113,28 @@ func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 		http.Error(w, "Unable to parse body", http.StatusBadRequest)
 		return
 	}
-	if request.URL == "" {
+	originalURL := request.URL
+	if originalURL == "" {
 		http.Error(w, "URL is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, request.URL)
+	w.Header().Add("Content-Type", "application/json")
+	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
 	if err != nil {
-		http.Error(w, "Unable to create shortened URL", http.StatusInternalServerError)
-		return
+		shortenerError := appErrors.ShortenerError{}
+		if errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
+			shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
+			if err != nil {
+				http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+				return
+			}
+			w.WriteHeader(http.StatusConflict)
+		} else {
+			http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+			return
+		}
+	} else {
+		w.WriteHeader(http.StatusCreated)
 	}
 	response := &ShortenResponseDto{Result: fmt.Sprintf("%s/%s", sh.shortenedURLAddr, shortenedURL.ShortURL)}
 	rawBytes, err := response.MarshalJSON()
@@ -112,8 +145,6 @@ func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 	if contextHasError(w, ctx) {
 		return
 	}
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s", rawBytes)
 }
 
@@ -159,7 +190,7 @@ func (sh *ShortenerHandlers) APIShortenURLBatch(w http.ResponseWriter, r *http.R
 	defer cancel()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Unable to read body", http.StatusBadRequest)
+		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
 		return
 	}
 	request := ExternalShortenedURLRequestDtoSlice{}
@@ -194,14 +225,20 @@ func (sh *ShortenerHandlers) APIShortenURLBatch(w http.ResponseWriter, r *http.R
 }
 
 func contextHasError(w http.ResponseWriter, ctx context.Context) bool {
-	switch ctx.Err() {
-	case context.Canceled:
-		fmt.Printf("Request canceled")
-		http.Error(w, "Request canceled", http.StatusInternalServerError)
-		return true
-	case context.DeadlineExceeded:
-		fmt.Printf("Request timeout")
-		http.Error(w, "Timeout exceeded", http.StatusInternalServerError)
+	if err := ctx.Err(); err != nil {
+		var errMsg string
+		var errCode int
+
+		switch err {
+		case context.Canceled:
+			errMsg, errCode = "Request canceled", http.StatusInternalServerError
+		case context.DeadlineExceeded:
+			errMsg, errCode = "Timeout exceeded", http.StatusInternalServerError
+		default:
+			return false
+		}
+
+		http.Error(w, errMsg, errCode)
 		return true
 	}
 	return false
