@@ -73,26 +73,22 @@ func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 	}
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
 	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
-	if err != nil {
-		shortenerError := appErrors.ShortenerError{}
-		if errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
-			shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
-			if err != nil {
-				http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusConflict)
-		} else {
+
+	shortenerError := appErrors.ShortenerError{}
+	if err != nil && errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
+		shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
+		if err != nil {
 			http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
 			return
 		}
+		w.WriteHeader(http.StatusConflict)
+	} else if err != nil {
+		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+		return
 	} else {
 		w.WriteHeader(http.StatusCreated)
 	}
-	if err != nil {
-		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
-		return
-	}
+
 	if contextHasError(w, ctx) {
 		return
 	}
@@ -120,22 +116,22 @@ func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 	}
 	w.Header().Add("Content-Type", "application/json")
 	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
-	if err != nil {
-		shortenerError := appErrors.ShortenerError{}
-		if errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
-			shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
-			if err != nil {
-				http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
-				return
-			}
-			w.WriteHeader(http.StatusConflict)
-		} else {
+
+	shortenerError := appErrors.ShortenerError{}
+	if err != nil && errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
+		shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
+		if err != nil {
 			http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
 			return
 		}
+		w.WriteHeader(http.StatusConflict)
+	} else if err != nil {
+		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+		return
 	} else {
 		w.WriteHeader(http.StatusCreated)
 	}
+
 	response := &ShortenResponseDto{Result: fmt.Sprintf("%s/%s", sh.shortenedURLAddr, shortenedURL.ShortURL)}
 	rawBytes, err := response.MarshalJSON()
 	if err != nil {

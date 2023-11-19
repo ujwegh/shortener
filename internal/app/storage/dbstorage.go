@@ -8,15 +8,24 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
+	"github.com/ujwegh/shortener/internal/app/config"
 	appErrors "github.com/ujwegh/shortener/internal/app/errors"
 	"github.com/ujwegh/shortener/internal/app/model"
+	"github.com/ujwegh/shortener/internal/app/storage/migrations"
 )
 
 type DBStorage struct {
 	db *sqlx.DB
 }
 
-func NewDBStorage(db *sqlx.DB) *DBStorage {
+func NewDBStorage(cfg config.AppConfig) *DBStorage {
+	db := Open(cfg.DatabaseDSN)
+	// Migrate the database
+	err := MigrateFS(db, migrations.FS, ".")
+	if err != nil {
+		panic(err)
+	}
+
 	return &DBStorage{db: db}
 }
 
