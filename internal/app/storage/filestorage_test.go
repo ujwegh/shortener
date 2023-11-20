@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/google/uuid"
 	"github.com/ujwegh/shortener/internal/app/model"
@@ -38,7 +39,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 		name    string
 		fields  fields
 		args    args
-		want    model.ShortenedURL
+		want    *model.ShortenedURL
 		wantErr bool
 	}{
 		{
@@ -49,7 +50,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 			args: args{
 				shortURL: "edVPg3ks",
 			},
-			want: model.ShortenedURL{
+			want: &model.ShortenedURL{
 				UUID:        uid,
 				ShortURL:    "edVPg3ks",
 				OriginalURL: "http://ya.ru",
@@ -60,7 +61,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fss := NewFileStorage(tt.fields.filePath)
-			got, err := fss.ReadShortenedURL(tt.args.shortURL)
+			got, err := fss.ReadShortenedURL(context.Background(), tt.args.shortURL)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ReadShortenedURL() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -116,7 +117,7 @@ func TestFileStorage_WriteShortenedURL(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			fss := NewFileStorage(tt.fields.filePath)
-			if err := fss.WriteShortenedURL(tt.args.shortenedURL); (err != nil) != tt.wantErr {
+			if err := fss.WriteShortenedURL(context.Background(), tt.args.shortenedURL); (err != nil) != tt.wantErr {
 				t.Errorf("WriteShortenedURL() error = %v, wantErr %v", err, tt.wantErr)
 			}
 

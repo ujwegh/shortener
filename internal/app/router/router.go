@@ -6,7 +6,7 @@ import (
 	"github.com/ujwegh/shortener/internal/app/middlware"
 )
 
-func NewAppRouter(us *handlers.ShortenerHandlers) *chi.Mux {
+func NewAppRouter(sh *handlers.ShortenerHandlers) *chi.Mux {
 	r := chi.NewRouter()
 
 	r.Use(middlware.RequestLogger)
@@ -14,8 +14,10 @@ func NewAppRouter(us *handlers.ShortenerHandlers) *chi.Mux {
 	r.Use(middlware.RequestZipper)
 	r.Use(middlware.ResponseZipper)
 
-	r.Post("/", us.ShortenURL)
-	r.Post("/api/shorten", us.APIShortenURL)
-	r.Get("/{id}", us.HandleShortenedURL)
+	r.Post("/", sh.ShortenURL)
+	r.Get("/ping", sh.Ping)
+	r.Post("/api/shorten", sh.APIShortenURL)
+	r.Post("/api/shorten/batch", sh.APIShortenURLBatch)
+	r.Get("/{id}", sh.HandleShortenedURL)
 	return r
 }

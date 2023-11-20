@@ -8,25 +8,38 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
+	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 type MockStorage struct {
 	urlMap map[string]model.ShortenedURL
 }
 
-func (fss *MockStorage) WriteShortenedURL(shortenedURL *model.ShortenedURL) error {
+func (fss *MockStorage) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (fss *MockStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
 	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
 	return nil
 }
 
-func (fss *MockStorage) ReadShortenedURL(shortURL string) (model.ShortenedURL, error) {
+func (fss *MockStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
 	shortenedURL := fss.urlMap[shortURL]
-	return shortenedURL, nil
+	return &shortenedURL, nil
+}
+
+func (fss *MockStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error {
+	for _, shortenedURL := range slice {
+		fss.urlMap[shortenedURL.ShortURL] = shortenedURL
+	}
+	return nil
 }
 
 func TestUrlShortener_ShortenUrl(t *testing.T) {
@@ -88,9 +101,12 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 
 			urlMap := make(map[string]model.ShortenedURL)
+			storage := &MockStorage{urlMap: urlMap}
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
+				shortenerService: service.NewShortenerService(storage),
 				shortenedURLAddr: test.shortenedURLAddr,
+				storage:          storage,
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.ShortenURL(w, request)
 
@@ -185,9 +201,12 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			request.Header.Set("Content-Type", "application/json")
 			var urlMap = make(map[string]model.ShortenedURL)
+			s := &MockStorage{urlMap: urlMap}
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap: urlMap}),
+				shortenerService: service.NewShortenerService(s),
 				shortenedURLAddr: test.shortenedURLAddr,
+				storage:          s,
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.APIShortenURL(w, request)
 
@@ -274,6 +293,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &ShortenerHandlers{
 				shortenerService: service.NewShortenerService(&MockStorage{urlMap: test.urlMap}),
+				contextTimeout:   time.Duration(2) * time.Second,
 			}
 			us.HandleShortenedURL(w, request)
 
@@ -289,6 +309,138 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 				assert.Equal(t, test.want.response, res.Header.Get("Location"))
 			} else {
 				assert.Equal(t, test.want.response, string(body))
+			}
+		})
+	}
+}
+
+func TestShortenerHandlers_Ping(t *testing.T) {
+	type fields struct {
+		shortenerService service.ShortenerService
+		shortenedURLAddr string
+		storage          storage.Storage
+	}
+	type args struct {
+		writer  http.ResponseWriter
+		request *http.Request
+	}
+	storage := &MockStorage{}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		// TODO: Add test cases.
+		{
+			name: "positive ping test",
+			fields: fields{
+				shortenerService: service.NewShortenerService(storage),
+				shortenedURLAddr: "http://localhost:8080",
+				storage:          storage,
+			},
+			args: args{
+				writer:  httptest.NewRecorder(),
+				request: httptest.NewRequest(http.MethodGet, "/ping", nil),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			us := &ShortenerHandlers{
+				shortenerService: tt.fields.shortenerService,
+				shortenedURLAddr: tt.fields.shortenedURLAddr,
+				storage:          tt.fields.storage,
+				contextTimeout:   time.Duration(2) * time.Second,
+			}
+			us.Ping(tt.args.writer, tt.args.request)
+			// assert response
+			res := tt.args.writer.(*httptest.ResponseRecorder).Result()
+			res.Body.Close()
+			assert.Equal(t, http.StatusOK, res.StatusCode)
+		})
+	}
+}
+
+func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
+	type fields struct {
+		shortenerService service.ShortenerService
+		shortenedURLAddr string
+		storage          storage.Storage
+		contextTimeout   time.Duration
+	}
+	type args struct {
+		w http.ResponseWriter
+		r *http.Request
+	}
+	urlMap := make(map[string]model.ShortenedURL)
+	tests := []struct {
+		name        string
+		fields      fields
+		args        args
+		responseURL string
+		wantErr     bool
+	}{
+		{
+			name: "positive shorten url batch test",
+			fields: fields{
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap}),
+				shortenedURLAddr: "http://localhost:8080",
+				storage:          &MockStorage{urlMap},
+				contextTimeout:   time.Duration(2) * time.Second,
+			},
+			args: args{
+				w: httptest.NewRecorder(),
+				r: httptest.NewRequest(http.MethodPost,
+					"/api/shorten/batch",
+					strings.NewReader(`
+						[
+							{
+								"correlation_id": "1",
+								"original_url": "https://google.com"
+							},
+							{
+								"correlation_id": "2",
+								"original_url": "https://ya.ru"
+							},
+							{
+								"correlation_id": "3",	
+								"original_url": "https://apple.com"
+							}
+						]
+			`)),
+			},
+			responseURL: "http://localhost:8080/",
+			wantErr:     false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sh := &ShortenerHandlers{
+				shortenerService: tt.fields.shortenerService,
+				shortenedURLAddr: tt.fields.shortenedURLAddr,
+				storage:          tt.fields.storage,
+				contextTimeout:   tt.fields.contextTimeout,
+			}
+			sh.APIShortenURLBatch(tt.args.w, tt.args.r)
+			// assert response
+			if !tt.wantErr {
+				res := tt.args.w.(*httptest.ResponseRecorder).Result()
+				assert.Equal(t, http.StatusCreated, res.StatusCode)
+				body, err := io.ReadAll(res.Body)
+				require.NoError(t, err)
+				err2 := res.Body.Close()
+				require.NoError(t, err2)
+
+				response := ExternalShortenedURLResponseDtoSlice{}
+				err = response.UnmarshalJSON(body)
+				if err != nil {
+					assert.Fail(t, err.Error())
+				}
+				var dtos []ExternalShortenedURLResponseDto = response
+
+				for i := 0; i < len(dtos); i++ {
+					assert.Equal(t, 8, len(strings.Split(dtos[i].ShortURL, tt.responseURL)[1]))
+				}
 			}
 		})
 	}

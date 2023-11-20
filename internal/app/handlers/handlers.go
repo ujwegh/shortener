@@ -1,18 +1,26 @@
 package handlers
 
 import (
+	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
-	"github.com/mailru/easyjson"
+	appErrors "github.com/ujwegh/shortener/internal/app/errors"
+	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
+	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
+	"time"
 )
 
 type (
 	ShortenerHandlers struct {
 		shortenerService service.ShortenerService
 		shortenedURLAddr string
+		storage          storage.Storage
+		contextTimeout   time.Duration
 	}
 	//easyjson:json
 	ShortenRequestDto struct {
@@ -22,19 +30,40 @@ type (
 	ShortenResponseDto struct {
 		Result string `json:"result"`
 	}
+	//easyjson:json
+	ExternalShortenedURLRequestDto struct {
+		CorrelationID string `json:"correlation_id"`
+		OriginalURL   string `json:"original_url"`
+	}
+	//easyjson:json
+	ExternalShortenedURLResponseDto struct {
+		CorrelationID string `json:"correlation_id"`
+		ShortURL      string `json:"short_url"`
+	}
+	//easyjson:json
+	ExternalShortenedURLRequestDtoSlice []ExternalShortenedURLRequestDto
+	//easyjson:json
+	ExternalShortenedURLResponseDtoSlice []ExternalShortenedURLResponseDto
 )
 
-func NewShortenerHandlers(shortenedURLAddr string, service service.ShortenerService) *ShortenerHandlers {
+const errMsgCreateShortURL = "Unable to create shortened URL"
+const errMsgEnableReadBody = "Unable to read body"
+
+func NewShortenerHandlers(shortenedURLAddr string, contextTimeout int, service service.ShortenerService, storage storage.Storage) *ShortenerHandlers {
 	return &ShortenerHandlers{
 		shortenerService: service,
+		storage:          storage,
 		shortenedURLAddr: shortenedURLAddr,
+		contextTimeout:   time.Duration(contextTimeout) * time.Second,
 	}
 }
 
-func (us *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) {
+func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Unable to read body", http.StatusBadRequest)
+		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
 		return
 	}
 	originalURL := string(body)
@@ -42,51 +71,80 @@ func (us *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "Url is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedURL, err := us.shortenerService.CreateShortenedURL(originalURL)
-	if err != nil {
-		http.Error(w, "Unable to create shortened URL", http.StatusInternalServerError)
+	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
+	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
+	shortenedURL, hasError := sh.checkCreateShortenedURLError(ctx, w, err, shortenedURL, originalURL)
+	if hasError {
 		return
 	}
-	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusCreated)
-	fmt.Fprintf(w, "%s/%s", us.shortenedURLAddr, shortenedURL.ShortURL)
+
+	if contextHasError(w, ctx) {
+		return
+	}
+	fmt.Fprintf(w, "%s/%s", sh.shortenedURLAddr, shortenedURL.ShortURL)
 }
 
-func (us *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Request) {
+func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Unable to read body", http.StatusBadRequest)
+		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
 		return
 	}
 	request := ShortenRequestDto{}
-	err = easyjson.Unmarshal(body, &request)
+	err = request.UnmarshalJSON(body)
 	if err != nil {
 		http.Error(w, "Unable to parse body", http.StatusBadRequest)
 		return
 	}
-	if request.URL == "" {
+	originalURL := request.URL
+	if originalURL == "" {
 		http.Error(w, "URL is empty", http.StatusBadRequest)
 		return
 	}
-	shortenedURL, err := us.shortenerService.CreateShortenedURL(request.URL)
-	if err != nil {
-		http.Error(w, "Unable to create shortened URL", http.StatusInternalServerError)
+	w.Header().Add("Content-Type", "application/json")
+	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
+	shortenedURL, hasError := sh.checkCreateShortenedURLError(ctx, w, err, shortenedURL, originalURL)
+	if hasError {
 		return
 	}
-	response := &ShortenResponseDto{Result: fmt.Sprintf("%s/%s", us.shortenedURLAddr, shortenedURL.ShortURL)}
-	rawBytes, err := easyjson.Marshal(response)
+
+	response := &ShortenResponseDto{Result: fmt.Sprintf("%s/%s", sh.shortenedURLAddr, shortenedURL.ShortURL)}
+	rawBytes, err := response.MarshalJSON()
 	if err != nil {
 		http.Error(w, "Unable to marshal response", http.StatusInternalServerError)
 		return
 	}
-	w.Header().Add("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	if contextHasError(w, ctx) {
+		return
+	}
 	fmt.Fprintf(w, "%s", rawBytes)
 }
 
-func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
+func (sh *ShortenerHandlers) checkCreateShortenedURLError(ctx context.Context, w http.ResponseWriter, err error, shortenedURL *model.ShortenedURL, originalURL string) (*model.ShortenedURL, bool) {
+	shortenerError := appErrors.ShortenerError{}
+	if err != nil && errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
+		shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
+		if err != nil {
+			http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+			return nil, true
+		}
+		w.WriteHeader(http.StatusConflict)
+	} else if err != nil {
+		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
+		return nil, true
+	} else {
+		w.WriteHeader(http.StatusCreated)
+	}
+	return shortenedURL, false
+}
+
+func (sh *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
 	shortKey := chi.URLParam(r, "id")
-	shortenedURL, err := us.shortenerService.GetShortenedURL(shortKey)
+	shortenedURL, err := sh.shortenerService.GetShortenedURL(ctx, shortKey)
 	if err != nil {
 		http.Error(w, "Unable to get shortened URL", http.StatusInternalServerError)
 		return
@@ -96,6 +154,111 @@ func (us *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.R
 		http.Error(w, "Shortened url not found", http.StatusNotFound)
 		return
 	}
+
+	if contextHasError(w, ctx) {
+		return
+	}
 	w.Header().Add("Location", originalURL)
 	http.Redirect(w, r, originalURL, http.StatusTemporaryRedirect)
+}
+
+func (sh *ShortenerHandlers) Ping(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
+	err := sh.storage.Ping(ctx)
+	if err != nil {
+		http.Error(w, "Unable to ping storage", http.StatusInternalServerError)
+		return
+	}
+
+	if contextHasError(w, ctx) {
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (sh *ShortenerHandlers) APIShortenURLBatch(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
+		return
+	}
+	request := ExternalShortenedURLRequestDtoSlice{}
+	err = request.UnmarshalJSON(body)
+	if err != nil {
+		http.Error(w, "Unable to parse body", http.StatusBadRequest)
+		return
+	}
+	var dtos []ExternalShortenedURLRequestDto = request
+	if len(dtos) == 0 {
+		http.Error(w, "Batch is empty", http.StatusBadRequest)
+		return
+	}
+	urls := mapExternalRequestToShortenedURL(dtos)
+	shortenedURLs, err := sh.shortenerService.BatchCreateShortenedURLs(ctx, *urls)
+	if err != nil {
+		http.Error(w, "Unable to batch insert shortened URLs", http.StatusInternalServerError)
+		return
+	}
+	response := mapShortenedURLToExternalResponse(sh, *shortenedURLs)
+	rawBytes, err := response.MarshalJSON()
+	if err != nil {
+		http.Error(w, "Unable to marshal response", http.StatusInternalServerError)
+		return
+	}
+	if contextHasError(w, ctx) {
+		return
+	}
+	w.Header().Add("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	fmt.Fprintf(w, "%s", rawBytes)
+}
+
+func contextHasError(w http.ResponseWriter, ctx context.Context) bool {
+	if err := ctx.Err(); err != nil {
+		var errMsg string
+		var errCode int
+
+		switch err {
+		case context.Canceled:
+			errMsg, errCode = "Request canceled", http.StatusInternalServerError
+		case context.DeadlineExceeded:
+			errMsg, errCode = "Timeout exceeded", http.StatusInternalServerError
+		default:
+			return false
+		}
+
+		http.Error(w, errMsg, errCode)
+		return true
+	}
+	return false
+}
+
+func mapShortenedURLToExternalResponse(sh *ShortenerHandlers, slice []model.ShortenedURL) ExternalShortenedURLResponseDtoSlice {
+	var responseSlice []ExternalShortenedURLResponseDto
+	for _, item := range slice {
+		responseItem := ExternalShortenedURLResponseDto{
+			CorrelationID: item.CorrelationID.String,
+			ShortURL:      fmt.Sprintf("%s/%s", sh.shortenedURLAddr, item.ShortURL),
+		}
+		responseSlice = append(responseSlice, responseItem)
+	}
+	return responseSlice
+}
+
+func mapExternalRequestToShortenedURL(slice []ExternalShortenedURLRequestDto) *[]model.ShortenedURL {
+	var shortenedURLs []model.ShortenedURL
+	for _, item := range slice {
+		shortenedURL := model.ShortenedURL{
+			CorrelationID: sql.NullString{
+				String: item.CorrelationID,
+				Valid:  true,
+			},
+			OriginalURL: item.OriginalURL,
+		}
+		shortenedURLs = append(shortenedURLs, shortenedURL)
+	}
+	return &shortenedURLs
 }
