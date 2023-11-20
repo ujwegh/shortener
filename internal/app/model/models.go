@@ -13,4 +13,9 @@ type (
 		OriginalURL   string         `json:"original_url" db:"original_url"`
 		CorrelationID sql.NullString `json:"correlation_id" db:"correlation_id"`
 	}
+	//easyjson:json
+	UserURL struct {
+		UUID             uuid.UUID `json:"uuid" db:"uuid"`
+		ShortenedURLUUID uuid.UUID `json:"shortened_url_uuid" db:"shortened_url_uuid"`
+	}
 )

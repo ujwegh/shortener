@@ -5,6 +5,7 @@ import (
 	"github.com/ujwegh/shortener/internal/app/config"
 	"github.com/ujwegh/shortener/internal/app/handlers"
 	"github.com/ujwegh/shortener/internal/app/logger"
+	"github.com/ujwegh/shortener/internal/app/middlware"
 	"github.com/ujwegh/shortener/internal/app/router"
 	"github.com/ujwegh/shortener/internal/app/service"
 	"github.com/ujwegh/shortener/internal/app/storage"
@@ -15,12 +16,13 @@ import (
 func main() {
 	c := config.ParseFlags()
 	logger.InitLogger(c.LogLevel)
-	var us *handlers.ShortenerHandlers
 	s := storage.NewStorage(c)
 	ss := service.NewShortenerService(s)
-	us = handlers.NewShortenerHandlers(c.ShortenedURLAddr, c.ContextTimeoutSec, ss, s)
+	sh := handlers.NewShortenerHandlers(c.ShortenedURLAddr, c.ContextTimeoutSec, ss, s)
+	ts := service.NewTokenService(c)
+	am := middlware.NewAuthMiddleware(ts)
 
-	r := router.NewAppRouter(us)
+	r := router.NewAppRouter(sh, am)
 
 	fmt.Printf("Starting server on port %s...\n", strings.Split(c.ServerAddr, ":")[1])
 	http.ListenAndServe(c.ServerAddr, r)

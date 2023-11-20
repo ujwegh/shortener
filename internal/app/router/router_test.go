@@ -6,13 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/ujwegh/shortener/internal/app/config"
 	"github.com/ujwegh/shortener/internal/app/handlers"
+	"github.com/ujwegh/shortener/internal/app/middlware"
+	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
-	"github.com/ujwegh/shortener/internal/app/storage"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -20,13 +22,59 @@ import (
 	"testing"
 )
 
+type MockStorage struct {
+	urlMap   map[string]model.ShortenedURL
+	userURLs []model.ShortenedURL
+}
+
+func (fss *MockStorage) CreateUserURL(ctx context.Context, userURL *model.UserURL) error {
+	var shortenedURL model.ShortenedURL
+	for _, url := range fss.urlMap {
+		if url.UUID == userURL.ShortenedURLUUID {
+			shortenedURL = url
+		}
+	}
+	fss.userURLs = append(fss.userURLs, shortenedURL)
+	return nil
+}
+
+func (fss *MockStorage) ReadUserURLs(ctx context.Context, uid *uuid.UUID) ([]model.ShortenedURL, error) {
+	return fss.userURLs, nil
+}
+
+func (fss *MockStorage) Ping(ctx context.Context) error {
+	return nil
+}
+
+func (fss *MockStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
+	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
+	return nil
+}
+
+func (fss *MockStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
+	shortenedURL := fss.urlMap[shortURL]
+	return &shortenedURL, nil
+}
+
+func (fss *MockStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error {
+	for _, shortenedURL := range slice {
+		fss.urlMap[shortenedURL.ShortURL] = shortenedURL
+	}
+	return nil
+}
+
 func TestRequestZipper(t *testing.T) {
 	// Setup
 	c := config.AppConfig{}
-	s := storage.NewFileStorage(c.FileStoragePath)
+	s := &MockStorage{
+		urlMap:   make(map[string]model.ShortenedURL),
+		userURLs: make([]model.ShortenedURL, 0),
+	}
 	ss := service.NewShortenerService(s)
 	sh := handlers.NewShortenerHandlers(c.ShortenedURLAddr, 5, ss, s)
-	router := NewAppRouter(sh)
+	tsc := service.NewTokenService(c)
+	am := middlware.NewAuthMiddleware(tsc)
+	router := NewAppRouter(sh, am)
 	ts := httptest.NewServer(router)
 	defer ts.Close()
 

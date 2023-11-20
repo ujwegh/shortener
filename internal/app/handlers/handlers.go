@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"github.com/go-chi/chi/v5"
+	appContext "github.com/ujwegh/shortener/internal/app/context"
 	appErrors "github.com/ujwegh/shortener/internal/app/errors"
+	"github.com/ujwegh/shortener/internal/app/logger"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
 	"github.com/ujwegh/shortener/internal/app/storage"
+	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"time"
@@ -44,6 +47,13 @@ type (
 	ExternalShortenedURLRequestDtoSlice []ExternalShortenedURLRequestDto
 	//easyjson:json
 	ExternalShortenedURLResponseDtoSlice []ExternalShortenedURLResponseDto
+	//easyjson:json
+	UserURLDto struct {
+		ShortURL    string `json:"short_url"`
+		OriginalURL string `json:"original_url"`
+	}
+	//easyjson:json
+	UserURLDtoSlice []UserURLDto
 )
 
 const errMsgCreateShortURL = "Unable to create shortened URL"
@@ -61,6 +71,13 @@ func NewShortenerHandlers(shortenedURLAddr string, contextTimeout int, service s
 func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
 	defer cancel()
+
+	userUID := appContext.UserUID(r.Context())
+	if userUID == nil {
+		http.Error(w, "User is not authenticated", http.StatusUnauthorized)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
@@ -72,7 +89,7 @@ func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8")
-	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
+	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, userUID, originalURL)
 	shortenedURL, hasError := sh.checkCreateShortenedURLError(ctx, w, err, shortenedURL, originalURL)
 	if hasError {
 		return
@@ -87,6 +104,13 @@ func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
 	defer cancel()
+
+	userUID := appContext.UserUID(r.Context())
+	if userUID == nil {
+		http.Error(w, "User is not authenticated", http.StatusUnauthorized)
+		return
+	}
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, errMsgEnableReadBody, http.StatusBadRequest)
@@ -104,7 +128,7 @@ func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	w.Header().Add("Content-Type", "application/json")
-	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, originalURL)
+	shortenedURL, err := sh.shortenerService.CreateShortenedURL(ctx, userUID, originalURL)
 	shortenedURL, hasError := sh.checkCreateShortenedURLError(ctx, w, err, shortenedURL, originalURL)
 	if hasError {
 		return
@@ -127,11 +151,13 @@ func (sh *ShortenerHandlers) checkCreateShortenedURLError(ctx context.Context, w
 	if err != nil && errors.As(err, &shortenerError) && shortenerError.Msg() == "unique violation" {
 		shortenedURL, err = sh.shortenerService.GetShortenedURL(ctx, originalURL)
 		if err != nil {
+			logger.Log.Error(errMsgCreateShortURL, zap.Error(err))
 			http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
 			return nil, true
 		}
 		w.WriteHeader(http.StatusConflict)
 	} else if err != nil {
+		logger.Log.Error(errMsgCreateShortURL, zap.Error(err))
 		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
 		return nil, true
 	} else {
@@ -216,6 +242,37 @@ func (sh *ShortenerHandlers) APIShortenURLBatch(w http.ResponseWriter, r *http.R
 	fmt.Fprintf(w, "%s", rawBytes)
 }
 
+func (sh *ShortenerHandlers) APIUserURLs(writer http.ResponseWriter, request *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
+	userUID := appContext.UserUID(request.Context())
+	if userUID == nil {
+		http.Error(writer, "User is not authenticated", http.StatusUnauthorized)
+		return
+	}
+	shortenedURLs, err := sh.shortenerService.GetUserShortenedURLs(ctx, userUID)
+	if err != nil {
+		http.Error(writer, "Unable to get user URLs", http.StatusInternalServerError)
+		return
+	}
+	if len(*shortenedURLs) == 0 {
+		writer.WriteHeader(http.StatusNoContent)
+		return
+	}
+	response := mapShortenedURLToUserURLDtoSlice(sh, *shortenedURLs)
+	rawBytes, err := response.MarshalJSON()
+	if err != nil {
+		http.Error(writer, "Unable to marshal response", http.StatusInternalServerError)
+		return
+	}
+	if contextHasError(writer, ctx) {
+		return
+	}
+	writer.Header().Add("Content-Type", "application/json")
+	writer.WriteHeader(http.StatusOK)
+	fmt.Fprintf(writer, "%s", rawBytes)
+}
+
 func contextHasError(w http.ResponseWriter, ctx context.Context) bool {
 	if err := ctx.Err(); err != nil {
 		var errMsg string
@@ -242,6 +299,17 @@ func mapShortenedURLToExternalResponse(sh *ShortenerHandlers, slice []model.Shor
 		responseItem := ExternalShortenedURLResponseDto{
 			CorrelationID: item.CorrelationID.String,
 			ShortURL:      fmt.Sprintf("%s/%s", sh.shortenedURLAddr, item.ShortURL),
+		}
+		responseSlice = append(responseSlice, responseItem)
+	}
+	return responseSlice
+}
+func mapShortenedURLToUserURLDtoSlice(sh *ShortenerHandlers, slice []model.ShortenedURL) UserURLDtoSlice {
+	var responseSlice []UserURLDto
+	for _, item := range slice {
+		responseItem := UserURLDto{
+			OriginalURL: item.OriginalURL,
+			ShortURL:    fmt.Sprintf("%s/%s", sh.shortenedURLAddr, item.ShortURL),
 		}
 		responseSlice = append(responseSlice, responseItem)
 	}

@@ -3,9 +3,11 @@ package handlers
 import (
 	"context"
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/mailru/easyjson"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	appContext "github.com/ujwegh/shortener/internal/app/context"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/service"
 	"github.com/ujwegh/shortener/internal/app/storage"
@@ -18,7 +20,23 @@ import (
 )
 
 type MockStorage struct {
-	urlMap map[string]model.ShortenedURL
+	urlMap   map[string]model.ShortenedURL
+	userURLs []model.ShortenedURL
+}
+
+func (fss *MockStorage) CreateUserURL(ctx context.Context, userURL *model.UserURL) error {
+	var shortenedURL model.ShortenedURL
+	for _, url := range fss.urlMap {
+		if url.UUID == userURL.ShortenedURLUUID {
+			shortenedURL = url
+		}
+	}
+	fss.userURLs = append(fss.userURLs, shortenedURL)
+	return nil
+}
+
+func (fss *MockStorage) ReadUserURLs(ctx context.Context, uid *uuid.UUID) ([]model.ShortenedURL, error) {
+	return fss.userURLs, nil
 }
 
 func (fss *MockStorage) Ping(ctx context.Context) error {
@@ -43,6 +61,8 @@ func (fss *MockStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice [
 }
 
 func TestUrlShortener_ShortenUrl(t *testing.T) {
+	userUID := uuid.New()
+
 	type want struct {
 		code        int
 		response    string
@@ -99,6 +119,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.route, strings.NewReader(test.body))
 			rctx := chi.NewRouteContext()
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
+			request = request.WithContext(appContext.WithUserUID(request.Context(), &userUID))
 
 			urlMap := make(map[string]model.ShortenedURL)
 			storage := &MockStorage{urlMap: urlMap}
@@ -131,6 +152,8 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 }
 
 func TestUrlShortener_APIShortenUrl(t *testing.T) {
+	userUID := uuid.New()
+
 	type want struct {
 		code        int
 		response    string
@@ -199,6 +222,8 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			request := httptest.NewRequest(test.method, test.route, strings.NewReader(test.body))
 			rctx := chi.NewRouteContext()
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
+			request = request.WithContext(appContext.WithUserUID(request.Context(), &userUID))
+
 			request.Header.Set("Content-Type", "application/json")
 			var urlMap = make(map[string]model.ShortenedURL)
 			s := &MockStorage{urlMap: urlMap}
@@ -373,6 +398,7 @@ func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
 		r *http.Request
 	}
 	urlMap := make(map[string]model.ShortenedURL)
+	userUrls := make([]model.ShortenedURL, 0)
 	tests := []struct {
 		name        string
 		fields      fields
@@ -383,9 +409,9 @@ func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
 		{
 			name: "positive shorten url batch test",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap}),
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}),
 				shortenedURLAddr: "http://localhost:8080",
-				storage:          &MockStorage{urlMap},
+				storage:          &MockStorage{urlMap, userUrls},
 				contextTimeout:   time.Duration(2) * time.Second,
 			},
 			args: args{
