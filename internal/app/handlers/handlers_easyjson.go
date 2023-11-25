@@ -566,3 +566,69 @@ func (v *ExternalShortenedURLRequestDto) UnmarshalJSON(data []byte) error {
 func (v *ExternalShortenedURLRequestDto) UnmarshalEasyJSON(l *jlexer.Lexer) {
 	easyjson8e4821bfDecodeGithubComUjweghShortenerInternalAppHandlers7(l, v)
 }
+func easyjson8e4821bfDecodeGithubComUjweghShortenerInternalAppHandlers8(in *jlexer.Lexer, out *DeleteUserURLsDto) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		in.Skip()
+		*out = nil
+	} else {
+		in.Delim('[')
+		if *out == nil {
+			if !in.IsDelim(']') {
+				*out = make(DeleteUserURLsDto, 0, 4)
+			} else {
+				*out = DeleteUserURLsDto{}
+			}
+		} else {
+			*out = (*out)[:0]
+		}
+		for !in.IsDelim(']') {
+			var v10 string
+			v10 = string(in.String())
+			*out = append(*out, v10)
+			in.WantComma()
+		}
+		in.Delim(']')
+	}
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjson8e4821bfEncodeGithubComUjweghShortenerInternalAppHandlers8(out *jwriter.Writer, in DeleteUserURLsDto) {
+	if in == nil && (out.Flags&jwriter.NilSliceAsEmpty) == 0 {
+		out.RawString("null")
+	} else {
+		out.RawByte('[')
+		for v11, v12 := range in {
+			if v11 > 0 {
+				out.RawByte(',')
+			}
+			out.String(string(v12))
+		}
+		out.RawByte(']')
+	}
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v DeleteUserURLsDto) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjson8e4821bfEncodeGithubComUjweghShortenerInternalAppHandlers8(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v DeleteUserURLsDto) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjson8e4821bfEncodeGithubComUjweghShortenerInternalAppHandlers8(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *DeleteUserURLsDto) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjson8e4821bfDecodeGithubComUjweghShortenerInternalAppHandlers8(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *DeleteUserURLsDto) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjson8e4821bfDecodeGithubComUjweghShortenerInternalAppHandlers8(l, v)
+}

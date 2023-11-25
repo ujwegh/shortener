@@ -5,8 +5,10 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"github.com/google/uuid"
+	"github.com/ujwegh/shortener/internal/app/logger"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/storage"
+	"go.uber.org/zap"
 )
 
 type (
@@ -15,16 +17,25 @@ type (
 		GetShortenedURL(ctx context.Context, url string) (*model.ShortenedURL, error)
 		BatchCreateShortenedURLs(ctx context.Context, dtos []model.ShortenedURL) (*[]model.ShortenedURL, error)
 		GetUserShortenedURLs(ctx context.Context, userUID *uuid.UUID) (*[]model.ShortenedURL, error)
+		DeleteUserShortenedURLs(ctx context.Context, userUID *uuid.UUID, shortURLKeys []string) error
 	}
 	ShortenerServiceImpl struct {
-		storage storage.Storage
+		storage     storage.Storage
+		taskChannel chan Task
+	}
+	Task struct {
+		UserUID      uuid.UUID
+		ShortURLKeys []string
 	}
 )
 
 func NewShortenerService(storage storage.Storage) *ShortenerServiceImpl {
-	return &ShortenerServiceImpl{
-		storage: storage,
+	svc := &ShortenerServiceImpl{
+		storage:     storage,
+		taskChannel: make(chan Task, 100),
 	}
+	go svc.batchProcess()
+	return svc
 }
 
 func (ss *ShortenerServiceImpl) CreateShortenedURL(ctx context.Context, userUID *uuid.UUID, originalURL string) (*model.ShortenedURL, error) {
@@ -76,6 +87,37 @@ func (ss *ShortenerServiceImpl) GetUserShortenedURLs(ctx context.Context, userUI
 		return nil, err
 	}
 	return &userURLs, nil
+}
+
+func (ss *ShortenerServiceImpl) DeleteUserShortenedURLs(ctx context.Context, userUID *uuid.UUID, shortURLKeys []string) error {
+	const chunkSize = 20
+	slice := make([]string, 0, chunkSize)
+	for _, shortURL := range shortURLKeys {
+		slice = append(slice, shortURL)
+		if len(slice) == chunkSize {
+			ss.taskChannel <- Task{
+				UserUID:      *userUID,
+				ShortURLKeys: slice,
+			}
+			slice = nil
+		}
+	}
+	if len(slice) > 0 {
+		ss.taskChannel <- Task{
+			UserUID:      *userUID,
+			ShortURLKeys: slice,
+		}
+	}
+	return nil
+}
+
+func (ss *ShortenerServiceImpl) batchProcess() {
+	for task := range ss.taskChannel {
+		err := ss.storage.DeleteUserURLs(context.Background(), &task.UserUID, task.ShortURLKeys)
+		if err != nil {
+			logger.Log.Error("failed to delete user URLs", zap.Error(err))
+		}
+	}
 }
 
 func generateKey() string {

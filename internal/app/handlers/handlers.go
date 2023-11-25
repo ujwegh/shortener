@@ -54,6 +54,9 @@ type (
 	}
 	//easyjson:json
 	UserURLDtoSlice []UserURLDto
+
+	//easyjson:json
+	DeleteUserURLsDto []string
 )
 
 const errMsgCreateShortURL = "Unable to create shortened URL"
@@ -98,6 +101,7 @@ func (sh *ShortenerHandlers) ShortenURL(w http.ResponseWriter, r *http.Request) 
 	if contextHasError(w, ctx) {
 		return
 	}
+	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s/%s", sh.shortenedURLAddr, shortenedURL.ShortURL)
 }
 
@@ -143,6 +147,7 @@ func (sh *ShortenerHandlers) APIShortenURL(w http.ResponseWriter, r *http.Reques
 	if contextHasError(w, ctx) {
 		return
 	}
+	w.WriteHeader(http.StatusCreated)
 	fmt.Fprintf(w, "%s", rawBytes)
 }
 
@@ -160,8 +165,6 @@ func (sh *ShortenerHandlers) checkCreateShortenedURLError(ctx context.Context, w
 		logger.Log.Error(errMsgCreateShortURL, zap.Error(err))
 		http.Error(w, errMsgCreateShortURL, http.StatusInternalServerError)
 		return nil, true
-	} else {
-		w.WriteHeader(http.StatusCreated)
 	}
 	return shortenedURL, false
 }
@@ -178,6 +181,11 @@ func (sh *ShortenerHandlers) HandleShortenedURL(w http.ResponseWriter, r *http.R
 	originalURL := shortenedURL.OriginalURL
 	if originalURL == "" {
 		http.Error(w, "Shortened url not found", http.StatusNotFound)
+		return
+	}
+
+	if shortenedURL.DeletedFlag {
+		w.WriteHeader(http.StatusGone)
 		return
 	}
 
@@ -242,7 +250,7 @@ func (sh *ShortenerHandlers) APIShortenURLBatch(w http.ResponseWriter, r *http.R
 	fmt.Fprintf(w, "%s", rawBytes)
 }
 
-func (sh *ShortenerHandlers) APIUserURLs(writer http.ResponseWriter, request *http.Request) {
+func (sh *ShortenerHandlers) APIGetUserURLs(writer http.ResponseWriter, request *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
 	defer cancel()
 	userUID := appContext.UserUID(request.Context())
@@ -271,6 +279,46 @@ func (sh *ShortenerHandlers) APIUserURLs(writer http.ResponseWriter, request *ht
 	writer.Header().Add("Content-Type", "application/json")
 	writer.WriteHeader(http.StatusOK)
 	fmt.Fprintf(writer, "%s", rawBytes)
+}
+
+func (sh *ShortenerHandlers) APIDeleteUserURLs(writer http.ResponseWriter, request *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), sh.contextTimeout)
+	defer cancel()
+	userUID := appContext.UserUID(request.Context())
+	if userUID == nil {
+		http.Error(writer, "User is not authenticated", http.StatusUnauthorized)
+		return
+	}
+
+	body, err := io.ReadAll(request.Body)
+	if err != nil {
+		http.Error(writer, errMsgEnableReadBody, http.StatusBadRequest)
+		return
+	}
+
+	requestBody := DeleteUserURLsDto{}
+	err = requestBody.UnmarshalJSON(body)
+	if err != nil {
+		http.Error(writer, "Unable to parse body", http.StatusBadRequest)
+		return
+	}
+	var shortURLKeys []string = requestBody
+	if len(shortURLKeys) == 0 {
+		http.Error(writer, "Batch is empty", http.StatusBadRequest)
+		return
+	}
+
+	err = sh.shortenerService.DeleteUserShortenedURLs(ctx, userUID, shortURLKeys)
+
+	if err != nil {
+		http.Error(writer, "Unable to delete user URLs", http.StatusInternalServerError)
+		return
+	}
+
+	if contextHasError(writer, ctx) {
+		return
+	}
+	writer.WriteHeader(http.StatusAccepted)
 }
 
 func contextHasError(w http.ResponseWriter, ctx context.Context) bool {

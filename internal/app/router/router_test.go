@@ -27,6 +27,11 @@ type MockStorage struct {
 	userURLs []model.ShortenedURL
 }
 
+func (fss *MockStorage) DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (fss *MockStorage) CreateUserURL(ctx context.Context, userURL *model.UserURL) error {
 	var shortenedURL model.ShortenedURL
 	for _, url := range fss.urlMap {

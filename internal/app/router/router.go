@@ -19,7 +19,8 @@ func NewAppRouter(sh *handlers.ShortenerHandlers, am middlware.AuthMiddleware) *
 	r.Get("/ping", sh.Ping)
 	r.Post("/api/shorten", sh.APIShortenURL)
 	r.Post("/api/shorten/batch", sh.APIShortenURLBatch)
-	r.Get("/api/user/urls", sh.APIUserURLs)
+	r.Get("/api/user/urls", sh.APIGetUserURLs)
+	r.Delete("/api/user/urls", sh.APIDeleteUserURLs)
 	r.Get("/{id}", sh.HandleShortenedURL)
 	return r
 }

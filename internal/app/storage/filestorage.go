@@ -18,6 +18,11 @@ type FileStorage struct {
 	mutex                 sync.Mutex
 }
 
+func (fs *FileStorage) DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func NewFileStorage(cfg config.AppConfig) *FileStorage {
 	urlMap := make(map[string]model.ShortenedURL)
 	uuidMap := make(map[uuid.UUID]model.ShortenedURL)
