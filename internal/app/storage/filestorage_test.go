@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/google/uuid"
+	"github.com/ujwegh/shortener/internal/app/config"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"os"
 	"reflect"
@@ -12,13 +13,15 @@ import (
 
 func TestFileStorage_ReadShortenedURL(t *testing.T) {
 	// prepare test data
-	testFileName := "/tmp/test.json"
-	file, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	testShortenedURLsFileName := "/tmp/shortened-urls-test.json"
+	file, err := os.OpenFile(testShortenedURLsFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		t.Error(err)
 	}
 	encoder := json.NewEncoder(file)
 	uid := uuid.New()
+	testUserURLsFileName := "/tmp/user-urls-test.json"
+
 	err = encoder.Encode(&model.ShortenedURL{
 		UUID:        uid,
 		ShortURL:    "edVPg3ks",
@@ -28,9 +31,13 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 		t.Error(err)
 	}
 
+	appConfig := config.AppConfig{
+		ShortenedURLsFilePath: testShortenedURLsFileName,
+		UserURLsFilePath:      testUserURLsFileName,
+	}
 	type fields struct {
-		filePath string
-		urlMap   map[string]string
+		cfg    config.AppConfig
+		urlMap map[string]string
 	}
 	type args struct {
 		shortURL string
@@ -45,7 +52,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 		{
 			name: "positive read shortened url test",
 			fields: fields{
-				filePath: testFileName,
+				cfg: appConfig,
 			},
 			args: args{
 				shortURL: "edVPg3ks",
@@ -60,7 +67,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fss := NewFileStorage(tt.fields.filePath)
+			fss := NewFileStorage(tt.fields.cfg)
 			got, err := fss.ReadShortenedURL(context.Background(), tt.args.shortURL)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ReadShortenedURL() error = %v, wantErr %v", err, tt.wantErr)
@@ -72,7 +79,7 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 		})
 	}
 	defer func() {
-		if err := os.Remove(testFileName); err != nil {
+		if err := os.Remove(testShortenedURLsFileName); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -80,15 +87,20 @@ func TestFileStorage_ReadShortenedURL(t *testing.T) {
 
 func TestFileStorage_WriteShortenedURL(t *testing.T) {
 	// prepare test data
-	testFileName := "/tmp/test.json"
-	_, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	testShortenedURLsFileName := "/tmp/shortened-urls-test.json"
+	_, err := os.OpenFile(testShortenedURLsFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		t.Error(err)
 	}
+	testUserURLsFileName := "/tmp/user-urls-test.json"
+	appConfig := config.AppConfig{
+		ShortenedURLsFilePath: testShortenedURLsFileName,
+		UserURLsFilePath:      testUserURLsFileName,
+	}
 
 	type fields struct {
-		filePath string
-		urlMap   map[string]string
+		cfg    config.AppConfig
+		urlMap map[string]string
 	}
 	type args struct {
 		shortenedURL *model.ShortenedURL
@@ -102,7 +114,7 @@ func TestFileStorage_WriteShortenedURL(t *testing.T) {
 		{
 			name: "positive write shortened url test",
 			fields: fields{
-				filePath: testFileName,
+				cfg: appConfig,
 			},
 			args: args{
 				shortenedURL: &model.ShortenedURL{
@@ -116,13 +128,13 @@ func TestFileStorage_WriteShortenedURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fss := NewFileStorage(tt.fields.filePath)
+			fss := NewFileStorage(tt.fields.cfg)
 			if err := fss.WriteShortenedURL(context.Background(), tt.args.shortenedURL); (err != nil) != tt.wantErr {
 				t.Errorf("WriteShortenedURL() error = %v, wantErr %v", err, tt.wantErr)
 			}
 
 			// check if the data was written to the file
-			file, err := os.OpenFile(testFileName, os.O_RDONLY, 0666)
+			file, err := os.OpenFile(testShortenedURLsFileName, os.O_RDONLY, 0666)
 			if err != nil {
 				t.Error(err)
 			}
@@ -135,14 +147,14 @@ func TestFileStorage_WriteShortenedURL(t *testing.T) {
 			if shortenedURL.ShortURL != tt.args.shortenedURL.ShortURL {
 				t.Errorf("WriteShortenedURL() got = %v, want %v", shortenedURL.ShortURL, tt.args.shortenedURL.ShortURL)
 			}
-			// assert internal urlMap not empty
-			if len(fss.urlMap) == 0 {
-				t.Errorf("WriteShortenedURL() got = %v, want %v", len(fss.urlMap), 1)
+			// assert internal shortURLMap not empty
+			if len(fss.shortURLMap) == 0 {
+				t.Errorf("WriteShortenedURL() got = %v, want %v", len(fss.shortURLMap), 1)
 			}
 		})
 	}
 	defer func() {
-		if err := os.Remove(testFileName); err != nil {
+		if err := os.Remove(testShortenedURLsFileName); err != nil {
 			t.Error(err)
 		}
 	}()
@@ -150,8 +162,8 @@ func TestFileStorage_WriteShortenedURL(t *testing.T) {
 
 func TestFileStorage_readAllShortenedURLs(t *testing.T) {
 	// prepare test data
-	testFileName := "/tmp/test.json"
-	file, err := os.OpenFile(testFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	testShortenedURLsFileName := "/tmp/shortened-urls-test.json"
+	file, err := os.OpenFile(testShortenedURLsFileName, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		t.Error(err)
 	}
@@ -165,10 +177,15 @@ func TestFileStorage_readAllShortenedURLs(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	testUserURLsFileName := "/tmp/user-urls-test.json"
+	appConfig := config.AppConfig{
+		ShortenedURLsFilePath: testShortenedURLsFileName,
+		UserURLsFilePath:      testUserURLsFileName,
+	}
 
 	type fields struct {
-		filePath string
-		urlMap   map[string]model.ShortenedURL
+		cfg    config.AppConfig
+		urlMap map[string]model.ShortenedURL
 	}
 	tests := []struct {
 		name    string
@@ -179,7 +196,7 @@ func TestFileStorage_readAllShortenedURLs(t *testing.T) {
 		{
 			name: "positive read all shortened urls test",
 			fields: fields{
-				filePath: testFileName,
+				cfg: appConfig,
 			},
 			want: []model.ShortenedURL{
 				{
@@ -193,7 +210,7 @@ func TestFileStorage_readAllShortenedURLs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fss := NewFileStorage(tt.fields.filePath)
+			fss := NewFileStorage(tt.fields.cfg)
 			got, err := fss.readAllShortenedURLs()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("readAllShortenedURLs() error = %v, wantErr %v", err, tt.wantErr)

@@ -20,13 +20,22 @@ CREATE TABLE IF NOT EXISTS shortened_urls
     uuid TEXT PRIMARY KEY,
     short_url TEXT UNIQUE NOT NULL,
     original_url TEXT NOT NULL,
-    correlation_id TEXT
+    correlation_id TEXT,
+    is_deleted BOOLEAN DEFAULT FALSE NOT NULL
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS shortened_urls_correlation_id_idx ON shortened_urls (correlation_id)
     WHERE correlation_id IS NOT NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS original_urls_unique_idx ON shortened_urls (original_url);
+
+CREATE TABLE IF NOT EXISTS user_urls
+(
+    uuid TEXT not null,
+    shortened_url_uuid TEXT not null references shortened_urls (uuid) on delete cascade
+);
+CREATE UNIQUE INDEX IF NOT EXISTS user_urls_unique_idx ON user_urls (uuid, shortened_url_uuid);
+
 `
 
 func setupInMemoryDB(t *testing.T) *sqlx.DB {
@@ -345,6 +354,85 @@ VALUES ('c12ff52b-970a-479c-bd45-1c6043c98736', 'abxW9ymI', 'https://ya.ru', 'co
 				}
 			}
 
+		})
+	}
+}
+
+func TestDBStorage_CreateUserURL(t *testing.T) {
+	db := setupInMemoryDB(t)
+	defer db.Close()
+
+	dbTestData := `
+DELETE FROM user_urls;
+DELETE FROM shortened_urls;
+INSERT INTO shortened_urls (uuid, short_url, original_url, correlation_id, is_deleted) 
+VALUES ('c12ff52b-970a-479c-bd45-1c6043c98736', 'abxW9ymI', 'https://ya.ru', 'correlation1', false),
+       ('cb280de3-c5ba-4fab-92d9-30bd72282afc', 'E9M9zboP', 'https://google.com', null, false),
+       ('f2c7c737-b70d-49cb-a0eb-079e10e8ed29', 'BDurKLrm', 'https://yandex.ru', null, false);
+
+INSERT INTO user_urls (uuid, shortened_url_uuid)
+values ('a16ad92b-b277-4640-a44e-167001cf5b86', 'c12ff52b-970a-479c-bd45-1c6043c98736'),
+       ('a16ad92b-b277-4640-a44e-167001cf5b86', 'cb280de3-c5ba-4fab-92d9-30bd72282afc');
+`
+
+	type fields struct {
+		db *sqlx.DB
+	}
+	type args struct {
+		ctx     context.Context
+		userURL *model.UserURL
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			name:   "create - success",
+			fields: fields{db: db},
+			args: args{
+				ctx: context.Background(),
+				userURL: &model.UserURL{
+					UUID:             uuid.MustParse("929a3464-5e15-4269-8707-99ce9a522c14"),
+					ShortenedURLUUID: uuid.MustParse("f2c7c737-b70d-49cb-a0eb-079e10e8ed29"),
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := db.Exec(dbTestData)
+			if err != nil {
+				t.Fatalf("could not insert test data: %v", err)
+			}
+			storage := &DBStorage{
+				db: tt.fields.db,
+			}
+			err = storage.CreateUserURL(tt.args.ctx, tt.args.userURL)
+			if err != nil {
+				t.Errorf("CreateUserURL() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.wantErr == false {
+				var count int64
+				err2 := db.QueryRow("SELECT COUNT(*) FROM shortened_urls").Scan(&count)
+				if err2 != nil {
+					t.Errorf("could not get count: %v", err2)
+				}
+				if count != 3 {
+					t.Errorf("expected 3 row, got %d", count)
+				}
+
+				var count2 int64
+				err3 := db.QueryRow("SELECT COUNT(*) FROM user_urls").Scan(&count2)
+				if err3 != nil {
+					t.Errorf("could not get count: %v", err3)
+				}
+				if count2 != 3 {
+					t.Errorf("expected 3 row, got %d", count2)
+				}
+			}
 		})
 	}
 }

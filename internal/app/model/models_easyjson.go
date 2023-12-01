@@ -3,6 +3,7 @@
 package model
 
 import (
+	sql "database/sql"
 	json "encoding/json"
 	easyjson "github.com/mailru/easyjson"
 	jlexer "github.com/mailru/easyjson/jlexer"
@@ -17,7 +18,84 @@ var (
 	_ easyjson.Marshaler
 )
 
-func easyjson782a897aDecodeGithubComUjweghShortenerInternalAppModel(in *jlexer.Lexer, out *ShortenedURL) {
+func easyjsonD2b7633eDecodeGithubComUjweghShortenerInternalAppModel(in *jlexer.Lexer, out *UserURL) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "uuid":
+			if data := in.UnsafeBytes(); in.Ok() {
+				in.AddError((out.UUID).UnmarshalText(data))
+			}
+		case "shortened_url_uuid":
+			if data := in.UnsafeBytes(); in.Ok() {
+				in.AddError((out.ShortenedURLUUID).UnmarshalText(data))
+			}
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjsonD2b7633eEncodeGithubComUjweghShortenerInternalAppModel(out *jwriter.Writer, in UserURL) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"uuid\":"
+		out.RawString(prefix[1:])
+		out.RawText((in.UUID).MarshalText())
+	}
+	{
+		const prefix string = ",\"shortened_url_uuid\":"
+		out.RawString(prefix)
+		out.RawText((in.ShortenedURLUUID).MarshalText())
+	}
+	out.RawByte('}')
+}
+
+// MarshalJSON supports json.Marshaler interface
+func (v UserURL) MarshalJSON() ([]byte, error) {
+	w := jwriter.Writer{}
+	easyjsonD2b7633eEncodeGithubComUjweghShortenerInternalAppModel(&w, v)
+	return w.Buffer.BuildBytes(), w.Error
+}
+
+// MarshalEasyJSON supports easyjson.Marshaler interface
+func (v UserURL) MarshalEasyJSON(w *jwriter.Writer) {
+	easyjsonD2b7633eEncodeGithubComUjweghShortenerInternalAppModel(w, v)
+}
+
+// UnmarshalJSON supports json.Unmarshaler interface
+func (v *UserURL) UnmarshalJSON(data []byte) error {
+	r := jlexer.Lexer{Data: data}
+	easyjsonD2b7633eDecodeGithubComUjweghShortenerInternalAppModel(&r, v)
+	return r.Error()
+}
+
+// UnmarshalEasyJSON supports easyjson.Unmarshaler interface
+func (v *UserURL) UnmarshalEasyJSON(l *jlexer.Lexer) {
+	easyjsonD2b7633eDecodeGithubComUjweghShortenerInternalAppModel(l, v)
+}
+func easyjsonD2b7633eDecodeGithubComUjweghShortenerInternalAppModel1(in *jlexer.Lexer, out *ShortenedURL) {
 	isTopLevel := in.IsStart()
 	if in.IsNull() {
 		if isTopLevel {
@@ -44,6 +122,10 @@ func easyjson782a897aDecodeGithubComUjweghShortenerInternalAppModel(in *jlexer.L
 			out.ShortURL = string(in.String())
 		case "original_url":
 			out.OriginalURL = string(in.String())
+		case "correlation_id":
+			easyjsonD2b7633eDecodeDatabaseSql(in, &out.CorrelationID)
+		case "is_deleted":
+			out.DeletedFlag = bool(in.Bool())
 		default:
 			in.SkipRecursive()
 		}
@@ -54,7 +136,7 @@ func easyjson782a897aDecodeGithubComUjweghShortenerInternalAppModel(in *jlexer.L
 		in.Consumed()
 	}
 }
-func easyjson782a897aEncodeGithubComUjweghShortenerInternalAppModel(out *jwriter.Writer, in ShortenedURL) {
+func easyjsonD2b7633eEncodeGithubComUjweghShortenerInternalAppModel1(out *jwriter.Writer, in ShortenedURL) {
 	out.RawByte('{')
 	first := true
 	_ = first
@@ -73,29 +155,88 @@ func easyjson782a897aEncodeGithubComUjweghShortenerInternalAppModel(out *jwriter
 		out.RawString(prefix)
 		out.String(string(in.OriginalURL))
 	}
+	{
+		const prefix string = ",\"correlation_id\":"
+		out.RawString(prefix)
+		easyjsonD2b7633eEncodeDatabaseSql(out, in.CorrelationID)
+	}
+	{
+		const prefix string = ",\"is_deleted\":"
+		out.RawString(prefix)
+		out.Bool(bool(in.DeletedFlag))
+	}
 	out.RawByte('}')
 }
 
 // MarshalJSON supports json.Marshaler interface
 func (v ShortenedURL) MarshalJSON() ([]byte, error) {
 	w := jwriter.Writer{}
-	easyjson782a897aEncodeGithubComUjweghShortenerInternalAppModel(&w, v)
+	easyjsonD2b7633eEncodeGithubComUjweghShortenerInternalAppModel1(&w, v)
 	return w.Buffer.BuildBytes(), w.Error
 }
 
 // MarshalEasyJSON supports easyjson.Marshaler interface
 func (v ShortenedURL) MarshalEasyJSON(w *jwriter.Writer) {
-	easyjson782a897aEncodeGithubComUjweghShortenerInternalAppModel(w, v)
+	easyjsonD2b7633eEncodeGithubComUjweghShortenerInternalAppModel1(w, v)
 }
 
 // UnmarshalJSON supports json.Unmarshaler interface
 func (v *ShortenedURL) UnmarshalJSON(data []byte) error {
 	r := jlexer.Lexer{Data: data}
-	easyjson782a897aDecodeGithubComUjweghShortenerInternalAppModel(&r, v)
+	easyjsonD2b7633eDecodeGithubComUjweghShortenerInternalAppModel1(&r, v)
 	return r.Error()
 }
 
 // UnmarshalEasyJSON supports easyjson.Unmarshaler interface
 func (v *ShortenedURL) UnmarshalEasyJSON(l *jlexer.Lexer) {
-	easyjson782a897aDecodeGithubComUjweghShortenerInternalAppModel(l, v)
+	easyjsonD2b7633eDecodeGithubComUjweghShortenerInternalAppModel1(l, v)
+}
+func easyjsonD2b7633eDecodeDatabaseSql(in *jlexer.Lexer, out *sql.NullString) {
+	isTopLevel := in.IsStart()
+	if in.IsNull() {
+		if isTopLevel {
+			in.Consumed()
+		}
+		in.Skip()
+		return
+	}
+	in.Delim('{')
+	for !in.IsDelim('}') {
+		key := in.UnsafeFieldName(false)
+		in.WantColon()
+		if in.IsNull() {
+			in.Skip()
+			in.WantComma()
+			continue
+		}
+		switch key {
+		case "String":
+			out.String = string(in.String())
+		case "Valid":
+			out.Valid = bool(in.Bool())
+		default:
+			in.SkipRecursive()
+		}
+		in.WantComma()
+	}
+	in.Delim('}')
+	if isTopLevel {
+		in.Consumed()
+	}
+}
+func easyjsonD2b7633eEncodeDatabaseSql(out *jwriter.Writer, in sql.NullString) {
+	out.RawByte('{')
+	first := true
+	_ = first
+	{
+		const prefix string = ",\"String\":"
+		out.RawString(prefix[1:])
+		out.String(string(in.String))
+	}
+	{
+		const prefix string = ",\"Valid\":"
+		out.RawString(prefix)
+		out.Bool(bool(in.Valid))
+	}
+	out.RawByte('}')
 }
