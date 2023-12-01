@@ -27,44 +27,43 @@ type MockStorage struct {
 	userURLs []model.ShortenedURL
 }
 
-func (fss *MockStorage) DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (fss *MockStorage) CreateUserURL(ctx context.Context, userURL *model.UserURL) error {
+func (s *MockStorage) CreateUserURL(ctx context.Context, userURL *model.UserURL) error {
 	var shortenedURL model.ShortenedURL
-	for _, url := range fss.urlMap {
+	for _, url := range s.urlMap {
 		if url.UUID == userURL.ShortenedURLUUID {
 			shortenedURL = url
 		}
 	}
-	fss.userURLs = append(fss.userURLs, shortenedURL)
+	s.userURLs = append(s.userURLs, shortenedURL)
 	return nil
 }
 
-func (fss *MockStorage) ReadUserURLs(ctx context.Context, uid *uuid.UUID) ([]model.ShortenedURL, error) {
-	return fss.userURLs, nil
+func (s *MockStorage) ReadUserURLs(ctx context.Context, uid *uuid.UUID) ([]model.ShortenedURL, error) {
+	return s.userURLs, nil
 }
 
-func (fss *MockStorage) Ping(ctx context.Context) error {
+func (s *MockStorage) Ping(ctx context.Context) error {
 	return nil
 }
 
-func (fss *MockStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
-	fss.urlMap[shortenedURL.ShortURL] = *shortenedURL
+func (s *MockStorage) WriteShortenedURL(ctx context.Context, shortenedURL *model.ShortenedURL) error {
+	s.urlMap[shortenedURL.ShortURL] = *shortenedURL
 	return nil
 }
 
-func (fss *MockStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
-	shortenedURL := fss.urlMap[shortURL]
+func (s *MockStorage) ReadShortenedURL(ctx context.Context, shortURL string) (*model.ShortenedURL, error) {
+	shortenedURL := s.urlMap[shortURL]
 	return &shortenedURL, nil
 }
 
-func (fss *MockStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error {
+func (s *MockStorage) WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error {
 	for _, shortenedURL := range slice {
-		fss.urlMap[shortenedURL.ShortURL] = shortenedURL
+		s.urlMap[shortenedURL.ShortURL] = shortenedURL
 	}
+	return nil
+}
+
+func (s MockStorage) DeleteBulk(ctx context.Context, buffer map[uuid.UUID][]string) error {
 	return nil
 }
 
@@ -75,7 +74,8 @@ func TestRequestZipper(t *testing.T) {
 		urlMap:   make(map[string]model.ShortenedURL),
 		userURLs: make([]model.ShortenedURL, 0),
 	}
-	ss := service.NewShortenerService(s)
+	tasks := make(chan service.Task)
+	ss := service.NewShortenerService(s, tasks)
 	sh := handlers.NewShortenerHandlers(c.ShortenedURLAddr, 5, ss, s)
 	tsc := service.NewTokenService(c)
 	am := middlware.NewAuthMiddleware(tsc)

@@ -25,7 +25,7 @@ type MockStorage struct {
 	userURLs []model.ShortenedURL
 }
 
-func (fss *MockStorage) DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error {
+func (fss *MockStorage) DeleteBulk(background context.Context, buffer map[uuid.UUID][]string) error {
 	return nil
 }
 
@@ -146,7 +146,7 @@ func TestUrlShortener_ShortenUrl(t *testing.T) {
 			urlMap := make(map[string]model.ShortenedURL)
 			storage := &MockStorage{urlMap: urlMap}
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(storage),
+				shortenerService: service.NewShortenerService(storage, nil),
 				shortenedURLAddr: test.shortenedURLAddr,
 				storage:          storage,
 				contextTimeout:   test.contextTimeout,
@@ -268,7 +268,7 @@ func TestUrlShortener_APIShortenUrl(t *testing.T) {
 			var urlMap = make(map[string]model.ShortenedURL)
 			s := &MockStorage{urlMap: urlMap}
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(s),
+				shortenerService: service.NewShortenerService(s, make(chan service.Task)),
 				shortenedURLAddr: test.shortenedURLAddr,
 				storage:          s,
 				contextTimeout:   test.contextTimeout,
@@ -394,7 +394,7 @@ func TestURLShortener_HandleShortenedURL(t *testing.T) {
 			rctx.URLParams.Add("id", test.pathVar)
 			request = request.WithContext(context.WithValue(request.Context(), chi.RouteCtxKey, rctx))
 			us := &ShortenerHandlers{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap: test.urlMap}),
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap: test.urlMap}, make(chan service.Task)),
 				contextTimeout:   test.contextTimeout,
 			}
 			us.HandleShortenedURL(w, request)
@@ -436,7 +436,7 @@ func TestShortenerHandlers_Ping(t *testing.T) {
 		{
 			name: "positive ping test",
 			fields: fields{
-				shortenerService: service.NewShortenerService(storage),
+				shortenerService: service.NewShortenerService(storage, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          storage,
 			},
@@ -491,7 +491,7 @@ func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
 		{
 			name: "positive shorten url batch test",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}),
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &MockStorage{urlMap, userUrls},
 				contextTimeout:   time.Duration(2) * time.Second,
@@ -523,7 +523,7 @@ func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
 		{
 			name: "empty body",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}),
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &MockStorage{urlMap, userUrls},
 				contextTimeout:   time.Duration(2) * time.Second,
@@ -544,7 +544,7 @@ func TestShortenerHandlers_APIShortenURLBatch(t *testing.T) {
 		{
 			name: "context timeout",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}),
+				shortenerService: service.NewShortenerService(&MockStorage{urlMap, userUrls}, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &MockStorage{urlMap, userUrls},
 				contextTimeout:   time.Duration(0) * time.Second,
@@ -664,7 +664,7 @@ func TestShortenerHandlers_APIGetUserURLs(t *testing.T) {
 		{
 			name: "positive get user urls test",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&storage),
+				shortenerService: service.NewShortenerService(&storage, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &storage,
 				contextTimeout:   time.Duration(2) * time.Second,
@@ -693,7 +693,7 @@ func TestShortenerHandlers_APIGetUserURLs(t *testing.T) {
 		{
 			name: "context timeout",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&storage),
+				shortenerService: service.NewShortenerService(&storage, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &storage,
 				contextTimeout:   time.Duration(0) * time.Second,
@@ -712,7 +712,7 @@ func TestShortenerHandlers_APIGetUserURLs(t *testing.T) {
 		{
 			name: "empty user uid",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&storage),
+				shortenerService: service.NewShortenerService(&storage, make(chan service.Task)),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &storage,
 				contextTimeout:   time.Duration(2) * time.Second,
@@ -786,6 +786,7 @@ func TestShortenerHandlers_APIDeleteUserURLs(t *testing.T) {
 		code     int
 		response string
 	}
+	taskChannel := make(chan service.Task, 100)
 	tests := []struct {
 		name    string
 		fields  fields
@@ -796,7 +797,7 @@ func TestShortenerHandlers_APIDeleteUserURLs(t *testing.T) {
 		{
 			name: "positive delete user urls test",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&s),
+				shortenerService: service.NewShortenerService(&s, taskChannel),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &s,
 				contextTimeout:   time.Duration(2) * time.Second,
@@ -815,7 +816,7 @@ func TestShortenerHandlers_APIDeleteUserURLs(t *testing.T) {
 		{
 			name: "context timeout",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&s),
+				shortenerService: service.NewShortenerService(&s, taskChannel),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &s,
 				contextTimeout:   time.Duration(0) * time.Second,
@@ -835,7 +836,7 @@ func TestShortenerHandlers_APIDeleteUserURLs(t *testing.T) {
 		{
 			name: "empty user uid",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&s),
+				shortenerService: service.NewShortenerService(&s, taskChannel),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &s,
 				contextTimeout:   time.Duration(2) * time.Second,
@@ -855,7 +856,7 @@ func TestShortenerHandlers_APIDeleteUserURLs(t *testing.T) {
 		{
 			name: "empty list",
 			fields: fields{
-				shortenerService: service.NewShortenerService(&s),
+				shortenerService: service.NewShortenerService(&s, taskChannel),
 				shortenedURLAddr: "http://localhost:8080",
 				storage:          &s,
 				contextTimeout:   time.Duration(2) * time.Second,

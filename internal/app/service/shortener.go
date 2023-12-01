@@ -9,6 +9,7 @@ import (
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/internal/app/storage"
 	"go.uber.org/zap"
+	"time"
 )
 
 type (
@@ -29,13 +30,11 @@ type (
 	}
 )
 
-func NewShortenerService(storage storage.Storage) *ShortenerServiceImpl {
-	svc := &ShortenerServiceImpl{
+func NewShortenerService(storage storage.Storage, taskChannel chan Task) *ShortenerServiceImpl {
+	return &ShortenerServiceImpl{
 		storage:     storage,
-		taskChannel: make(chan Task, 100),
+		taskChannel: taskChannel,
 	}
-	go svc.batchProcess()
-	return svc
 }
 
 func (ss *ShortenerServiceImpl) CreateShortenedURL(ctx context.Context, userUID *uuid.UUID, originalURL string) (*model.ShortenedURL, error) {
@@ -111,12 +110,46 @@ func (ss *ShortenerServiceImpl) DeleteUserShortenedURLs(ctx context.Context, use
 	return nil
 }
 
-func (ss *ShortenerServiceImpl) batchProcess() {
-	for task := range ss.taskChannel {
-		err := ss.storage.DeleteUserURLs(context.Background(), &task.UserUID, task.ShortURLKeys)
-		if err != nil {
-			logger.Log.Error("failed to delete user URLs", zap.Error(err))
+func (ss *ShortenerServiceImpl) BatchProcess(ctx context.Context, taskChannel <-chan Task) {
+	buffer := make(map[uuid.UUID][]string)
+	taskCount := 0
+
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case task, ok := <-taskChannel:
+			if !ok {
+				deleteUserURLs(ss, buffer)
+				return
+			}
+			buffer[task.UserUID] = append(buffer[task.UserUID], task.ShortURLKeys...)
+			taskCount++
+
+			if taskCount >= 20 {
+				deleteUserURLs(ss, buffer)
+				buffer = make(map[uuid.UUID][]string)
+				taskCount = 0
+			}
+		case <-ticker.C:
+			// Periodically flush the map
+			if taskCount > 0 {
+				deleteUserURLs(ss, buffer)
+				buffer = make(map[uuid.UUID][]string)
+				taskCount = 0
+			}
+
+		case <-ctx.Done():
+			deleteUserURLs(ss, buffer)
+			return
 		}
+	}
+}
+
+func deleteUserURLs(ss *ShortenerServiceImpl, buffer map[uuid.UUID][]string) {
+	err := ss.storage.DeleteBulk(context.Background(), buffer)
+	if err != nil {
+		logger.Log.Error("failed to delete bulk user URLs", zap.Error(err))
 	}
 }
 

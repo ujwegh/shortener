@@ -18,7 +18,7 @@ type FileStorage struct {
 	mutex                 sync.Mutex
 }
 
-func (fs *FileStorage) DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error {
+func (fs *FileStorage) DeleteBulk(background context.Context, buffer map[uuid.UUID][]string) error {
 	//TODO implement me
 	panic("implement me")
 }

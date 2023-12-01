@@ -9,10 +9,12 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 	"github.com/ujwegh/shortener/internal/app/config"
 	appErrors "github.com/ujwegh/shortener/internal/app/errors"
 	"github.com/ujwegh/shortener/internal/app/model"
 	"github.com/ujwegh/shortener/migrations"
+	"strings"
 )
 
 type DBStorage struct {
@@ -140,29 +142,34 @@ func (storage *DBStorage) CreateUserURL(ctx context.Context, userURL *model.User
 	return tx.Commit()
 }
 
-func (storage *DBStorage) DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error {
+func (storage *DBStorage) DeleteBulk(ctx context.Context, userURLs map[uuid.UUID][]string) error {
 	tx, err := storage.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	query := `update shortened_urls set is_deleted = true 
-              from user_urls uu
-              where shortened_urls.uuid = uu.shortened_url_uuid
-    		  AND uu.uuid = $1
-    		  AND shortened_urls.short_url = any ($2)`
 
-	stmt, err := tx.PrepareContext(ctx, query)
-	if err != nil {
-		return fmt.Errorf("prepare statement: %w", err)
+	query := `UPDATE shortened_urls SET is_deleted = true 
+              FROM user_urls uu
+              WHERE shortened_urls.uuid = uu.shortened_url_uuid AND (`
+
+	var params []interface{}
+	paramIndex := 1
+
+	for userUID, urls := range userURLs {
+		query += fmt.Sprintf("(uu.uuid = $%d AND shortened_urls.short_url = ANY($%d)) OR ", paramIndex, paramIndex+1)
+		params = append(params, userUID, pq.Array(urls))
+		paramIndex += 2
 	}
-	defer stmt.Close()
 
-	_, err = stmt.ExecContext(ctx, userURL, shortURLKeys)
+	query = strings.TrimSuffix(query, " OR ") + ")"
+
+	_, err = tx.ExecContext(ctx, query, params...)
 	if err != nil {
-		if err := tx.Rollback(); err != nil {
-			return fmt.Errorf("rollback transaction: %w", err)
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("rollback transaction: %w", rbErr)
 		}
 		return fmt.Errorf("delete user URLs: %w", err)
 	}
+
 	return tx.Commit()
 }

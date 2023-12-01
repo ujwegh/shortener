@@ -15,7 +15,7 @@ type Storage interface {
 	WriteBatchShortenedURLSlice(ctx context.Context, slice []model.ShortenedURL) error
 	CreateUserURL(ctx context.Context, userURL *model.UserURL) error
 	ReadUserURLs(ctx context.Context, userURL *uuid.UUID) ([]model.ShortenedURL, error)
-	DeleteUserURLs(ctx context.Context, userURL *uuid.UUID, shortURLKeys []string) error
+	DeleteBulk(background context.Context, buffer map[uuid.UUID][]string) error
 }
 
 func NewStorage(cfg config.AppConfig) Storage {
